@@ -9,13 +9,12 @@ if not (ok_pickers and ok_finders and ok_config and ok_actions and ok_action_sta
   end
 end
 
-local shell_history_path = '/Users/Macbook/.bash_history'
-
-local shell_histories = function(opts)
+local shell_histories = function(history_filepath, opts)
+  history_filepath = vim.fn.expand(history_filepath)
   opts = opts or {}
   pickers.new(opts, {
     prompt_title = 'scallop shell histories',
-    finder = finders.new_oneshot_job({ 'cat', shell_history_path }),
+    finder = finders.new_oneshot_job({ 'cat', history_filepath }),
     sorter = config.values.generic_sorter(opts),
     attach_mappings = function(prompt_bufnr, map)
       actions.select_default:replace(function()

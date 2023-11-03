@@ -1,11 +1,8 @@
+local configs = require('scallop.configs')
 local shell_histories = require('telescope.shell_histories')
 
 local Scallop = {}
 Scallop.__index = Scallop
-
-local default_options = {
-  prompt_pattern = 'Macbook\\$\\s',
-}
 
 function Scallop.new()
   local data = {
@@ -15,7 +12,7 @@ function Scallop.new()
     edit_bufnr = -1,
     edit_winid = -1,
     _prev_bufnr = vim.fn.bufnr('%'),
-    prompt_pattern = 'Macbook\\$\\s',
+    options = vim.deepcopy(configs.configs.options),
   }
 
   local self = setmetatable({
@@ -172,6 +169,10 @@ function Scallop:get_terminal_cwd()
 end
 
 function Scallop:jump_to_prompt(direction)
+  if self._data.options.prompt_pattern == '' then
+    return
+  end
+
   local flags = nil
   if direction == 'forward' then
     flags = 'enWz'
@@ -180,7 +181,7 @@ function Scallop:jump_to_prompt(direction)
   end
 
   local search_pos = vim.api.nvim_buf_call(self._data.terminal_bufnr, function()
-    return vim.fn.searchpos('^' .. self._data.prompt_pattern, flags)
+    return vim.fn.searchpos('^' .. self._data.options.prompt_pattern, flags)
   end)
 
   if search_pos[1] ~= 0 then
@@ -272,11 +273,11 @@ function Scallop:init_edit_buffer()
   end, keymap_opt)
   vim.keymap.set('n', '<C-k>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories({ default_text = scallop:get_edit_line() })
+    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line() })
   end, keymap_opt)
   vim.keymap.set('i', '<C-k>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories({ default_text = scallop:get_edit_line() })
+    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line() })
   end, keymap_opt)
 end
 
