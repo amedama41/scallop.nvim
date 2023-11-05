@@ -14,7 +14,7 @@ local shell_histories = function(history_filepath, opts)
   opts = opts or {}
   pickers.new(opts, {
     prompt_title = 'scallop shell histories',
-    finder = finders.new_oneshot_job({ 'cat', history_filepath }),
+    finder = finders.new_oneshot_job({ 'tail', '-r', history_filepath }),
     sorter = config.values.generic_sorter(opts),
     attach_mappings = function(prompt_bufnr, map)
       actions.select_default:replace(function()
