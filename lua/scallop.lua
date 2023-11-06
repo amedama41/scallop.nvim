@@ -273,11 +273,15 @@ function Scallop:init_edit_buffer()
   end, keymap_opt)
   vim.keymap.set('n', '<C-k>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line() })
+    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line() }, function(cmd)
+      vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
+    end)
   end, keymap_opt)
   vim.keymap.set('i', '<C-k>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line() })
+    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line() }, function(cmd)
+      vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
+    end)
   end, keymap_opt)
 end
 
@@ -292,7 +296,7 @@ function Scallop:get_edit_line()
   return vim.fn.getbufoneline(self._data.edit_bufnr, vim.fn.line('.', self._data.edit_winid))
 end
 
-function Scallop:start_edit(initial_cmd)
+function Scallop:start_edit(initial_cmd, does_insert)
   if self._data.edit_bufnr == -1 then
     self:open_edit_window()
     self:init_edit_buffer()
@@ -307,18 +311,23 @@ function Scallop:start_edit(initial_cmd)
   local cwd = self:get_terminal_cwd()
   vim.fn.win_execute(self._data.edit_winid, 'lcd ' .. cwd, 'silent')
 
+  vim.cmd [[startinsert]]
+
   if initial_cmd ~= nil then
+    local cursor_column = 0
+    if does_insert then
+      cursor_column = #initial_cmd
+    end
+
     local current_line = self:get_edit_line()
     if #current_line == 0 then
       vim.api.nvim_put({ initial_cmd }, 'c', true, false)
-      vim.api.nvim_win_set_cursor(self._data.edit_winid, { vim.fn.line('.', self._data.edit_winid), 0 })
+      vim.api.nvim_win_set_cursor(self._data.edit_winid, { vim.fn.line('.', self._data.edit_winid), cursor_column })
     else
       vim.fn.appendbufline(self._data.edit_bufnr, vim.fn.line('$', self._data.edit_winid), initial_cmd)
-      vim.api.nvim_win_set_cursor(self._data.edit_winid, { vim.fn.line('$', self._data.edit_winid), 0 })
+      vim.api.nvim_win_set_cursor(self._data.edit_winid, { vim.fn.line('$', self._data.edit_winid), cursor_column })
     end
   end
-
-  vim.cmd [[startinsert]]
 end
 
 function Scallop:execute_command(is_insert_mode)

@@ -9,7 +9,7 @@ if not (ok_pickers and ok_finders and ok_config and ok_actions and ok_action_sta
   end
 end
 
-local shell_histories = function(history_filepath, opts)
+local shell_histories = function(history_filepath, opts, callback)
   history_filepath = vim.fn.expand(history_filepath)
   opts = opts or {}
   pickers.new(opts, {
@@ -20,7 +20,7 @@ local shell_histories = function(history_filepath, opts)
       actions.select_default:replace(function()
         actions.close(prompt_bufnr)
         local selection = action_state.get_selected_entry()
-        vim.cmd('ScallopEdit ' .. selection[1])
+        callback(selection[1])
       end)
       return true
     end,
