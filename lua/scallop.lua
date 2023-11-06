@@ -287,7 +287,7 @@ end
 
 function Scallop:delete_edit_buffer()
   if self._data.edit_bufnr ~= -1 then
-    vim.api.nvim_buf_delete(self._data.edit_bufnr)
+    vim.api.nvim_buf_delete(self._data.edit_bufnr, { force = true })
     self._data.edit_bufnr = -1
   end
 end
