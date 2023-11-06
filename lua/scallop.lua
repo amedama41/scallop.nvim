@@ -240,7 +240,7 @@ function Scallop:init_edit_buffer()
 
   vim.keymap.set('n', '<CR>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:execute_command(false)
+    scallop:execute_command()
   end, keymap_opt)
   vim.keymap.set('n', '<C-n>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
@@ -261,7 +261,7 @@ function Scallop:init_edit_buffer()
 
   vim.keymap.set('i', '<CR>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:execute_command(true)
+    scallop:execute_command()
   end, keymap_opt)
   vim.keymap.set('i', '<C-c>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
@@ -273,13 +273,13 @@ function Scallop:init_edit_buffer()
   end, keymap_opt)
   vim.keymap.set('n', '<C-k>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line() }, function(cmd)
+    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line('.') }, function(cmd)
       vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
     end)
   end, keymap_opt)
   vim.keymap.set('i', '<C-k>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line() }, function(cmd)
+    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line('.') }, function(cmd)
       vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
     end)
   end, keymap_opt)
@@ -292,8 +292,8 @@ function Scallop:delete_edit_buffer()
   end
 end
 
-function Scallop:get_edit_line()
-  return vim.fn.getbufoneline(self._data.edit_bufnr, vim.fn.line('.', self._data.edit_winid))
+function Scallop:get_edit_line(pos)
+  return vim.fn.getbufoneline(self._data.edit_bufnr, vim.fn.line(pos, self._data.edit_winid))
 end
 
 function Scallop:start_edit(initial_cmd, does_insert)
@@ -319,7 +319,7 @@ function Scallop:start_edit(initial_cmd, does_insert)
       cursor_column = #initial_cmd
     end
 
-    local current_line = self:get_edit_line()
+    local current_line = self:get_edit_line('.')
     if #current_line == 0 then
       vim.api.nvim_put({ initial_cmd }, 'c', true, false)
       vim.api.nvim_win_set_cursor(self._data.edit_winid, { vim.fn.line('.', self._data.edit_winid), cursor_column })
@@ -330,21 +330,32 @@ function Scallop:start_edit(initial_cmd, does_insert)
   end
 end
 
-function Scallop:execute_command(is_insert_mode)
+function Scallop:execute_command()
   if self._data.edit_bufnr == -1 or self._data.edit_winid == -1 then
     return
   end
 
-  local cmd = self:get_edit_line()
+  local cmd = self:get_edit_line('.')
   self:jobsend(cmd, { cleanup = true, newline = true })
 
   -- Scroll terminal to bottom
   vim.fn.win_execute(self._data.terminal_winid, 'normal! G', 'silent')
 
-  if is_insert_mode then
-    vim.fn.appendbufline(self._data.edit_bufnr, vim.fn.line('$', self._data.edit_winid), '')
-    vim.api.nvim_win_set_cursor(self._data.edit_winid, { vim.fn.line('$', self._data.edit_winid), 0 })
+  local last_line = self:get_edit_line('$')
+  if last_line ~= cmd then
+    local append_line = vim.fn.line('$', self._data.edit_winid)
+    if vim.fn.match(last_line, '^\\s*$') ~= -1 then
+      append_line = math.max(append_line - 1, 0)
+    end
+    vim.fn.appendbufline(self._data.edit_bufnr, append_line, cmd)
   end
+
+  last_line = self:get_edit_line('$')
+  if vim.fn.match(last_line, '^\\s*$') == -1 then
+    vim.fn.appendbufline(self._data.edit_bufnr, vim.fn.line('$', self._data.edit_winid), '')
+  end
+
+  vim.api.nvim_win_set_cursor(self._data.edit_winid, { vim.fn.line('$', self._data.edit_winid), 0 })
 end
 
 function Scallop:send_ctrl(ctrl)
