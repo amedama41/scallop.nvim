@@ -76,11 +76,11 @@ function Scallop:open_terminal_window()
 end
 
 function Scallop:init_terminal_buffer(cwd)
-  local termopen_opts = {}
   if cwd ~= nil and vim.fn.isdirectory(cwd) then
-    termopen_opts.cwd = cwd
+    self._data.terminal_job_id = vim.fn.termopen(vim.o.shell, { cwd = cwd })
+  else
+    self._data.terminal_job_id = vim.fn.termopen(vim.o.shell)
   end
-  self._data.terminal_job_id = vim.fn.termopen(vim.o.shell, termopen_opts)
 
   vim.api.nvim_create_autocmd('TermClose', {
     buffer = self._data.terminal_bufnr,
