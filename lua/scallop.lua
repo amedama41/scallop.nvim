@@ -149,7 +149,7 @@ function Scallop:terminal_cd(directory)
   end
 
   local cwd = self:get_terminal_cwd()
-  if cwd == directory then
+  if cwd == directory or cwd .. '/' == directory then
     return
   end
 
