@@ -3,6 +3,7 @@ local shell_histories = require('telescope.shell_histories')
 
 local Scallop = {}
 Scallop.__index = Scallop
+Scallop.tabpage_handles = {}
 
 function Scallop.new()
   local data = {
@@ -31,6 +32,19 @@ end
 
 function Scallop:save()
   vim.t.scallop_data = self._data
+end
+
+function Scallop:terminate()
+  if self._data.terminal_job_id ~= -1 then
+    vim.fn.jobstop(self._data.terminal_job_id)
+  end
+
+  if self._data.terminal_bufnr ~= -1 then
+    vim.api.nvim_buf_delete(self._data.terminal_bufnr, { force = true })
+    self._data.terminal_bufnr = -1
+  end
+
+  self:delete_edit_buffer()
 end
 
 function Scallop:jobsend(cmd, options)
@@ -85,7 +99,12 @@ function Scallop:init_terminal_buffer(cwd)
   vim.api.nvim_create_autocmd('TermClose', {
     buffer = self._data.terminal_bufnr,
     callback = function()
-      local scallop = Scallop.from_data(vim.t.scallop_data)
+      local scallop_data = vim.t.scallop_data
+      if scallop_data == nil then
+        return
+      end
+
+      local scallop = Scallop.from_data(scallop_data)
       scallop:delete_edit_buffer()
 
       vim.fn.win_execute(scallop._data.terminal_winid, 'stopinsert', 'silent')
@@ -391,6 +410,7 @@ function M.start_terminal(cwd)
     scallop = Scallop.from_data(scallop_data)
   else
     scallop = Scallop.new()
+    Scallop.tabpage_handles[vim.fn.tabpagenr()] = vim.api.nvim_get_current_tabpage()
   end
   scallop:start_terminal(cwd)
 end
@@ -402,9 +422,34 @@ function M.start_terminal_edit(cmd, cwd)
     scallop = Scallop.from_data(scallop_data)
   else
     scallop = Scallop.new()
+    Scallop.tabpage_handles[vim.fn.tabpagenr()] = vim.api.nvim_get_current_tabpage()
   end
   scallop:start_terminal(cwd)
   scallop:start_edit(cmd)
 end
+
+vim.api.nvim_create_autocmd('TabClosed', {
+  group = vim.api.nvim_create_augroup('scallop-settings', { clear = true }),
+  callback = function(args)
+    local tabpagenr = tonumber(args.file)
+    if tabpagenr == nil then
+      return
+    end
+
+    local tabpage = Scallop.tabpage_handles[tabpagenr]
+    if tabpage == nil then
+      return
+    end
+
+    local scallop_data = vim.t[tabpage].scallop_data
+    if scallop_data ~= nil then
+      local scallop = Scallop.from_data(scallop_data)
+      scallop:terminate()
+      vim.t[tabpage].scallop_data = nil
+    end
+
+    Scallop.tabpage_handles[tabpagenr] = nil
+  end,
+})
 
 return M
