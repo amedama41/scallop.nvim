@@ -39,7 +39,7 @@ function Scallop:jobsend(cmd, options)
   end
 
   if options.cleanup then
-    cmd = vim.api.nvim_replace_termcodes("<C-U>", true, true, true) .. cmd
+    cmd = vim.api.nvim_replace_termcodes(self._data.options.cleanup_key_sequence, true, true, true) .. cmd
   end
   if options.newline then
     cmd = cmd .. vim.api.nvim_replace_termcodes("<CR>", true, true, true)
@@ -59,7 +59,7 @@ function Scallop:open_terminal_window()
     col = 1,
     width = vim.o.columns - 6,
     height = vim.o.lines - 6,
-    border = 'rounded',
+    border = self._data.options.floating_border,
   })
 
   vim.api.nvim_create_autocmd('WinClosed', {
@@ -120,8 +120,6 @@ function Scallop:init_terminal_buffer(cwd)
     local scallop = Scallop.from_data(vim.t.scallop_data)
     scallop:jump_to_prompt('backward')
   end, keymap_opt)
-
-  vim.cmd [[stopinsert]]
 end
 
 function Scallop:start_terminal(cwd)
@@ -149,7 +147,7 @@ function Scallop:terminal_cd(directory)
   end
 
   local cwd = self:get_terminal_cwd()
-  if cwd == directory or cwd .. '/' == directory then
+  if vim.fs.normalize(cwd) == vim.fs.normalize(directory) then
     return
   end
 
@@ -191,7 +189,7 @@ end
 
 function Scallop:close_terminal()
   if self._data.terminal_winid ~= -1 then
-    vim.fn.win_execute(self._data.terminal_winid, 'close!', 'silent')
+    vim.api.nvim_win_close(self._data.terminal_winid, true)
     self:closed_terminal_window()
   end
 end
@@ -213,7 +211,7 @@ function Scallop:open_edit_window()
     col = 1,
     width = vim.fn.winwidth(self._data.terminal_winid),
     height = 1,
-    border = 'rounded',
+    border = self._data.options.floating_border,
   })
 
   vim.api.nvim_create_autocmd('WinClosed', {
@@ -311,7 +309,7 @@ function Scallop:start_edit(initial_cmd, does_insert)
   local cwd = self:get_terminal_cwd()
   vim.fn.win_execute(self._data.edit_winid, 'lcd ' .. cwd, 'silent')
 
-  vim.cmd [[startinsert]]
+  vim.fn.win_execute(self._data.edit_winid, 'startinsert', 'silent')
 
   if initial_cmd ~= nil then
     local cursor_column = 0
@@ -370,7 +368,7 @@ end
 
 function Scallop:close_edit()
   if self._data.edit_winid ~= -1 then
-    vim.fn.win_execute(self._data.edit_winid, 'close!', 'silent')
+    vim.api.nvim_win_close(self._data.edit_winid, true)
     self:closed_edit_window()
   end
 end
