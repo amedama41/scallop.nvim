@@ -328,7 +328,7 @@ function Scallop:start_edit(initial_cmd, does_insert)
   local cwd = self:get_terminal_cwd()
   vim.fn.win_execute(self._data.edit_winid, 'lcd ' .. cwd, 'silent')
 
-  vim.fn.win_execute(self._data.edit_winid, 'startinsert', 'silent')
+  vim.fn.win_execute(self._data.edit_winid, 'startinsert!', 'silent')
 
   if initial_cmd ~= nil then
     local cursor_column = 0
