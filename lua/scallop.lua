@@ -251,7 +251,7 @@ function Scallop:init_edit_buffer()
   vim.bo[self._data.edit_bufnr].buftype = 'nofile'
   vim.bo[self._data.edit_bufnr].buflisted = false
   vim.bo[self._data.edit_bufnr].swapfile = false
-  vim.bo[self._data.edit_bufnr].filetype = 'bash'
+  vim.bo[self._data.edit_bufnr].filetype = self._data.options.edit_filetype
 
   local keymap_opt = { buffer = self._data.edit_bufnr }
 

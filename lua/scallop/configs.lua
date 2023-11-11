@@ -6,6 +6,7 @@ M.configs = {
     history_filepath = '',
     cleanup_key_sequence = '<C-k><C-u>',
     floating_border = 'rounded',
+    edit_filetype = 'bash',
   },
   mappings = {
     normal = {
