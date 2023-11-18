@@ -257,7 +257,7 @@ function Scallop:init_edit_buffer()
 
   vim.keymap.set('n', '<CR>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:execute_command()
+    scallop:execute_command(false)
   end, keymap_opt)
   vim.keymap.set('n', '<C-n>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
@@ -278,7 +278,7 @@ function Scallop:init_edit_buffer()
 
   vim.keymap.set('i', '<CR>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:execute_command()
+    scallop:execute_command(false)
   end, keymap_opt)
   vim.keymap.set('i', '<C-c>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
@@ -300,6 +300,11 @@ function Scallop:init_edit_buffer()
       vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
     end)
   end, keymap_opt)
+
+  vim.keymap.set('x', '<CR>', function()
+    local scallop = Scallop.from_data(vim.t.scallop_data)
+    scallop:execute_command(true)
+  end, keymap_opt)
 end
 
 function Scallop:delete_edit_buffer()
@@ -311,6 +316,15 @@ end
 
 function Scallop:get_edit_line(pos)
   return vim.fn.getbufoneline(self._data.edit_bufnr, vim.fn.line(pos, self._data.edit_winid))
+end
+
+function Scallop:get_select_lines()
+  local first = vim.fn.line("v", self._data.edit_winid)
+  local last = vim.fn.line(".", self._data.edit_winid)
+  if first > last then
+    first, last = last, first
+  end
+  return table.concat(vim.fn.getbufline(self._data.edit_bufnr, first, last), '\n')
 end
 
 function Scallop:start_edit(initial_cmd, does_insert)
@@ -347,12 +361,17 @@ function Scallop:start_edit(initial_cmd, does_insert)
   end
 end
 
-function Scallop:execute_command()
+function Scallop:execute_command(is_select)
   if self._data.edit_bufnr == -1 or self._data.edit_winid == -1 then
     return
   end
 
-  local cmd = self:get_edit_line('.')
+  local cmd
+  if is_select then
+    cmd = self:get_select_lines()
+  else
+    cmd = self:get_edit_line('.')
+  end
   self:jobsend(cmd, { cleanup = true, newline = true })
 
   -- Scroll terminal to bottom
