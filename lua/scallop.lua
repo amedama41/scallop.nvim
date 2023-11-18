@@ -410,7 +410,7 @@ function M.start_terminal(cwd)
     scallop = Scallop.from_data(scallop_data)
   else
     scallop = Scallop.new()
-    Scallop.tabpage_handles[vim.fn.tabpagenr()] = vim.api.nvim_get_current_tabpage()
+    Scallop.tabpage_handles[vim.api.nvim_get_current_tabpage()] = true
   end
   scallop:start_terminal(cwd)
 end
@@ -422,7 +422,7 @@ function M.start_terminal_edit(cmd, cwd)
     scallop = Scallop.from_data(scallop_data)
   else
     scallop = Scallop.new()
-    Scallop.tabpage_handles[vim.fn.tabpagenr()] = vim.api.nvim_get_current_tabpage()
+    Scallop.tabpage_handles[vim.api.nvim_get_current_tabpage()] = true
   end
   scallop:start_terminal(cwd)
   scallop:start_edit(cmd)
@@ -430,25 +430,29 @@ end
 
 vim.api.nvim_create_autocmd('TabClosed', {
   group = vim.api.nvim_create_augroup('scallop-settings', { clear = true }),
-  callback = function(args)
-    local tabpagenr = tonumber(args.file)
-    if tabpagenr == nil then
-      return
+  callback = function()
+    for tabpage, _ in pairs(Scallop.tabpage_handles) do
+      Scallop.tabpage_handles[tabpage] = false
     end
 
-    local tabpage = Scallop.tabpage_handles[tabpagenr]
-    if tabpage == nil then
-      return
+    for _, tabpage in pairs(vim.api.nvim_list_tabpages()) do
+      if Scallop.tabpage_handles[tabpage] ~= nil then
+        Scallop.tabpage_handles[tabpage] = true
+      end
     end
 
-    local scallop_data = vim.t[tabpage].scallop_data
-    if scallop_data ~= nil then
-      local scallop = Scallop.from_data(scallop_data)
-      scallop:terminate()
-      vim.t[tabpage].scallop_data = nil
-    end
+    for tabpage, living in pairs(Scallop.tabpage_handles) do
+      if not living then
+        local scallop_data = vim.t[tabpage].scallop_data
+        if scallop_data ~= nil then
+          local scallop = Scallop.from_data(scallop_data)
+          scallop:terminate()
+          vim.t[tabpage].scallop_data = nil
+        end
 
-    Scallop.tabpage_handles[tabpagenr] = nil
+        Scallop.tabpage_handles[tabpage] = nil
+      end
+    end
   end,
 })
 
