@@ -130,11 +130,6 @@ function Scallop:init_terminal_buffer(cwd)
     scallop:jump_to_prompt('forward')
   end, keymap_opt)
 
-  vim.keymap.set('n', '<C-n>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:jump_to_prompt('forward')
-  end, keymap_opt)
-
   vim.keymap.set('n', '<C-p>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
     scallop:jump_to_prompt('backward')
@@ -306,6 +301,7 @@ function Scallop:init_edit_buffer()
   vim.keymap.set('x', '<CR>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
     scallop:execute_command(true)
+    vim.fn.win_execute(self._data.edit_winid, "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true), 'silent')
   end, keymap_opt)
 end
 
