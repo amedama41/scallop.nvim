@@ -394,6 +394,9 @@ function Scallop:execute_command(is_select)
   end
 
   vim.api.nvim_win_set_cursor(self._data.edit_winid, { vim.fn.line('$', self._data.edit_winid), 0 })
+
+  local cwd = self:get_terminal_cwd()
+  vim.fn.win_execute(self._data.edit_winid, 'lcd ' .. cwd, 'silent')
 end
 
 function Scallop:send_ctrl(ctrl)
