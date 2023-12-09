@@ -12,7 +12,7 @@ function Scallop.new()
     terminal_winid = -1,
     edit_bufnr = -1,
     edit_winid = -1,
-    _prev_bufnr = vim.fn.bufnr('%'),
+    prev_winid = -1,
     options = vim.deepcopy(configs.configs.options),
   }
 
@@ -142,6 +142,7 @@ function Scallop:init_terminal_buffer(cwd)
 end
 
 function Scallop:start_terminal(cwd)
+  self._data.prev_winid = vim.fn.win_getid()
   if self._data.terminal_bufnr == -1 then
     self:open_terminal_window()
     self:init_terminal_buffer(cwd)
@@ -209,6 +210,7 @@ end
 function Scallop:close_terminal()
   if self._data.terminal_winid ~= -1 then
     vim.api.nvim_win_close(self._data.terminal_winid, true)
+    vim.fn.win_gotoid(self._data.prev_winid)
     self:closed_terminal_window()
   end
 end
@@ -407,6 +409,7 @@ end
 function Scallop:close_edit()
   if self._data.edit_winid ~= -1 then
     vim.api.nvim_win_close(self._data.edit_winid, true)
+    vim.fn.win_gotoid(self._data.terminal_winid)
     self:closed_edit_window()
   end
 end
