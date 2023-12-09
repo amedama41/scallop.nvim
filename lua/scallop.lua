@@ -287,13 +287,13 @@ function Scallop:init_edit_buffer()
   end, keymap_opt)
   vim.keymap.set('n', '<C-k>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line('.') }, function(cmd)
+    shell_histories(scallop:get_edit_all_lines(), scallop._data.options.history_filepath, { default_text = scallop:get_edit_line('.') }, function(cmd)
       vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
     end)
   end, keymap_opt)
   vim.keymap.set('i', '<C-k>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories(scallop._data.options.history_filepath, { default_text = scallop:get_edit_line('.') }, function(cmd)
+    shell_histories(scallop:get_edit_all_lines(), scallop._data.options.history_filepath, { default_text = scallop:get_edit_line('.') }, function(cmd)
       vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
     end)
   end, keymap_opt)
@@ -327,6 +327,10 @@ function Scallop:get_select_lines()
     first, last = last, first
   end
   return table.concat(vim.fn.getbufline(self._data.edit_bufnr, first, last), '\n')
+end
+
+function Scallop:get_edit_all_lines()
+  return vim.fn.getbufline(self._data.edit_bufnr, 1, "$")
 end
 
 function Scallop:start_edit(initial_cmd, does_insert)
