@@ -311,8 +311,12 @@ end
 
 function Scallop:delete_edit_buffer()
   if self._data.edit_bufnr ~= -1 then
+    local current_win = vim.fn.win_getid()
     vim.api.nvim_buf_delete(self._data.edit_bufnr, { force = true })
     self._data.edit_bufnr = -1
+    if current_win == self._data.edit_winid then
+      vim.fn.win_gotoid(self._data.terminal_winid)
+    end
   end
 end
 
