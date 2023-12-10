@@ -34,6 +34,10 @@ function Scallop:save()
   vim.t.scallop_data = self._data
 end
 
+function Scallop:reload()
+  self._data = vim.t.scallop_data
+end
+
 function Scallop:terminate()
   if self._data.terminal_job_id ~= -1 then
     vim.fn.jobstop(self._data.terminal_job_id)
@@ -205,15 +209,16 @@ end
 function Scallop:close_terminal()
   if self._data.terminal_winid ~= -1 then
     vim.api.nvim_win_close(self._data.terminal_winid, true)
-    vim.fn.win_gotoid(self._data.prev_winid)
+    self:reload()
     self:closed_terminal_window()
   end
 end
 
 function Scallop:closed_terminal_window()
-  self:close_edit()
   self._data.terminal_winid = -1
   self:save()
+  self:close_edit()
+  vim.fn.win_gotoid(self._data.prev_winid)
 end
 
 function Scallop:open_edit_window()
@@ -268,7 +273,11 @@ function Scallop:init_edit_buffer()
     local scallop = Scallop.from_data(vim.t.scallop_data)
     scallop:close_edit()
   end, keymap_opt)
-  vim.keymap.set('n', 'Q', function()
+  vim.keymap.set('n', '<C-q>', function()
+    local scallop = Scallop.from_data(vim.t.scallop_data)
+    scallop:close_terminal()
+  end, keymap_opt)
+  vim.keymap.set('i', '<C-q>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
     scallop:close_terminal()
   end, keymap_opt)
@@ -415,8 +424,9 @@ end
 
 function Scallop:close_edit()
   if self._data.edit_winid ~= -1 then
+    vim.fn.win_execute(self._data.edit_winid, 'stopinsert', 'silent')
     vim.api.nvim_win_close(self._data.edit_winid, true)
-    vim.fn.win_gotoid(self._data.terminal_winid)
+    self:reload()
     self:closed_edit_window()
   end
 end
