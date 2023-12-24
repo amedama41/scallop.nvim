@@ -17,8 +17,11 @@ local shell_histories = function(edit_histories, history_filepath, opts, callbac
 
   local entry_maker = opts.entry_maker or make_entry.gen_from_string(opts)
   local edit_history_entries = {}
-  for _, v in ipairs(edit_histories) do
-    if v ~= "" then
+  local duplicated_map = {}
+  for i = #edit_histories, 1, -1 do
+    local v = edit_histories[i]
+    if v ~= "" and duplicated_map[v] == nil then
+      duplicated_map[v] = true
       table.insert(edit_history_entries, entry_maker(v))
     end
   end
