@@ -1,13 +1,13 @@
 local ok_pickers, pickers = pcall(require, 'telescope.pickers')
-local ok_config, config = pcall(require, 'telescope.config')
 local ok_actions, actions = pcall(require, 'telescope.actions')
 local ok_action_state, action_state = pcall(require, 'telescope.actions.state')
 
-if not (ok_pickers and ok_config and ok_actions and ok_action_state) then
+if not (ok_pickers and ok_actions and ok_action_state) then
   return function()
   end
 end
 
+local sorters = require 'telescope.sorters'
 local async_oneshot_finder = require "telescope.finders.async_oneshot_finder"
 local make_entry = require "telescope.make_entry"
 
@@ -39,7 +39,7 @@ local shell_histories = function(edit_histories, history_filepath, opts, callbac
         }
       end,
     },
-    sorter = config.values.generic_sorter(opts),
+    sorter = sorters.fuzzy_with_index_bias(opts),
     attach_mappings = function(prompt_bufnr, map)
       actions.select_default:replace(function()
         actions.close(prompt_bufnr)
