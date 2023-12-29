@@ -310,7 +310,7 @@ function Scallop:init_edit_buffer()
   vim.keymap.set('x', '<CR>', function()
     local scallop = Scallop.from_data(vim.t.scallop_data)
     scallop:execute_command(true)
-    vim.fn.win_execute(self._data.edit_winid, "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true), 'silent')
+    vim.fn.win_execute(scallop._data.edit_winid, "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true), 'silent')
   end, keymap_opt)
 end
 
