@@ -22,7 +22,9 @@ local shell_histories = function(edit_histories, history_filepath, opts, callbac
     local v = edit_histories[i]
     if v ~= "" and duplicated_map[v] == nil then
       duplicated_map[v] = true
-      table.insert(edit_history_entries, entry_maker(v))
+      local entry = entry_maker(v)
+      entry.index = #edit_histories - i + 1
+      table.insert(edit_history_entries, entry)
     end
   end
 
