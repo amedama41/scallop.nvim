@@ -3,7 +3,7 @@ local shell_histories = require('telescope.shell_histories')
 
 local Scallop = {}
 Scallop.__index = Scallop
-Scallop.tabpage_handles = {}
+Scallop.tabpage_scallops = {}
 
 function Scallop.new()
   local data = {
@@ -18,29 +18,19 @@ function Scallop.new()
 
   local self = setmetatable({
     _data = data,
+    _living = true,
+    _tabpage_handle = vim.api.nvim_get_current_tabpage(),
   }, Scallop)
 
-  vim.t.scallop_data = data
+  Scallop.tabpage_scallops[self._tabpage_handle] = self
+
   return self
-end
-
-function Scallop.from_data(data)
-  return setmetatable({
-    _data = data,
-  }, Scallop)
-end
-
-function Scallop:save()
-  vim.t.scallop_data = self._data
-end
-
-function Scallop:reload()
-  self._data = vim.t.scallop_data
 end
 
 function Scallop:terminate()
   if self._data.terminal_job_id ~= -1 then
     vim.fn.jobstop(self._data.terminal_job_id)
+    self._data.terminal_job_id = -1
   end
 
   if self._data.terminal_bufnr ~= -1 then
@@ -49,6 +39,9 @@ function Scallop:terminate()
   end
 
   self:delete_edit_buffer()
+
+  self._living = false
+  Scallop.tabpage_scallops[self._tabpage_handle] = nil
 end
 
 function Scallop:jobsend(cmd, options)
@@ -84,10 +77,8 @@ function Scallop:open_terminal_window()
     pattern = tostring(self._data.terminal_winid),
     once = true,
     callback = function()
-      local scallop_data = vim.t.scallop_data
-      if scallop_data ~= nil then
-        local scallop = Scallop.from_data(scallop_data)
-        scallop:closed_terminal_window()
+      if self._living then
+        self:closed_terminal_window()
       end
     end,
   })
@@ -103,40 +94,41 @@ function Scallop:init_terminal_buffer(cwd)
   vim.api.nvim_create_autocmd('TermClose', {
     buffer = self._data.terminal_bufnr,
     callback = function()
-      local scallop_data = vim.t.scallop_data
-      if scallop_data == nil then
+      if not self._living then
         return
       end
 
-      local scallop = Scallop.from_data(scallop_data)
-      scallop:delete_edit_buffer()
+      vim.fn.win_execute(self._data.terminal_winid, 'stopinsert', 'silent')
 
-      vim.fn.win_execute(scallop._data.terminal_winid, 'stopinsert', 'silent')
-
-      vim.t.scallop_data = nil
+      self._data.terminal_job_id = -1
+      self:terminate()
     end,
   })
 
   local keymap_opt = { buffer = self._data.terminal_bufnr }
 
   vim.keymap.set('n', 'q', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:close_terminal()
+    if self._living then
+      self:close_terminal()
+    end
   end, keymap_opt)
 
   vim.keymap.set('n', 'e', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:start_edit()
+    if self._living then
+      self:start_edit()
+    end
   end, keymap_opt)
 
   vim.keymap.set('n', '<C-n>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:jump_to_prompt('forward')
+    if self._living then
+      self:jump_to_prompt('forward')
+    end
   end, keymap_opt)
 
   vim.keymap.set('n', '<C-p>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:jump_to_prompt('backward')
+    if self._living then
+      self:jump_to_prompt('backward')
+    end
   end, keymap_opt)
 end
 
@@ -145,10 +137,8 @@ function Scallop:start_terminal(cwd)
   if self._data.terminal_bufnr == -1 then
     self:open_terminal_window()
     self:init_terminal_buffer(cwd)
-    self:save()
   elseif self._data.terminal_winid == -1 then
     self:open_terminal_window()
-    self:save()
     if cwd ~= nil and vim.fn.isdirectory(cwd) then
       self:terminal_cd(cwd)
     end
@@ -209,14 +199,12 @@ end
 function Scallop:close_terminal()
   if self._data.terminal_winid ~= -1 then
     vim.api.nvim_win_close(self._data.terminal_winid, true)
-    self:reload()
     self:closed_terminal_window()
   end
 end
 
 function Scallop:closed_terminal_window()
   self._data.terminal_winid = -1
-  self:save()
   self:close_edit()
   vim.fn.win_gotoid(self._data.prev_winid)
 end
@@ -239,10 +227,8 @@ function Scallop:open_edit_window()
     pattern = tostring(self._data.edit_winid),
     once = true,
     callback = function()
-      local scallop_data = vim.t.scallop_data
-      if scallop_data ~= nil then
-        local scallop = Scallop.from_data(scallop_data)
-        scallop:closed_edit_window()
+      if self._living then
+        self:closed_edit_window()
       end
     end,
   })
@@ -258,59 +244,71 @@ function Scallop:init_edit_buffer()
   local keymap_opt = { buffer = self._data.edit_bufnr }
 
   vim.keymap.set('n', '<CR>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:execute_command(false)
+    if self._living then
+      self:execute_command(false)
+    end
   end, keymap_opt)
   vim.keymap.set('n', '<C-n>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:jump_to_prompt('forward')
+    if self._living then
+      self:jump_to_prompt('forward')
+    end
   end, keymap_opt)
   vim.keymap.set('n', '<C-p>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:jump_to_prompt('backward')
+    if self._living then
+      self:jump_to_prompt('backward')
+    end
   end, keymap_opt)
   vim.keymap.set('n', 'q', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:close_edit()
+    if self._living then
+      self:close_edit()
+    end
   end, keymap_opt)
   vim.keymap.set('n', '<C-q>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:close_terminal()
+    if self._living then
+      self:close_terminal()
+    end
   end, keymap_opt)
   vim.keymap.set('i', '<C-q>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:close_terminal()
+    if self._living then
+      self:close_terminal()
+    end
   end, keymap_opt)
 
   vim.keymap.set('i', '<CR>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:execute_command(false)
+    if self._living then
+      self:execute_command(false)
+    end
   end, keymap_opt)
   vim.keymap.set('i', '<C-c>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:send_ctrl('<C-c>')
+    if self._living then
+      self:send_ctrl('<C-c>')
+    end
   end, keymap_opt)
   vim.keymap.set('i', '<C-d>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:send_ctrl('<C-d>')
+    if self._living then
+      self:send_ctrl('<C-d>')
+    end
   end, keymap_opt)
   vim.keymap.set('n', '<C-k>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories(scallop:get_edit_all_lines(), scallop._data.options.history_filepath, { default_text = scallop:get_edit_line('.') }, function(cmd)
-      vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
-    end)
+    if self._living then
+      shell_histories(self:get_edit_all_lines(), self._data.options.history_filepath, { default_text = self:get_edit_line('.') }, function(cmd)
+        vim.defer_fn(function() self:start_edit(cmd, true) end, 0)
+      end)
+    end
   end, keymap_opt)
   vim.keymap.set('i', '<C-k>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    shell_histories(scallop:get_edit_all_lines(), scallop._data.options.history_filepath, { default_text = scallop:get_edit_line('.') }, function(cmd)
-      vim.defer_fn(function() scallop:start_edit(cmd, true) end, 0)
-    end)
+    if self._living then
+      shell_histories(self:get_edit_all_lines(), self._data.options.history_filepath, { default_text = self:get_edit_line('.') }, function(cmd)
+        vim.defer_fn(function() self:start_edit(cmd, true) end, 0)
+      end)
+    end
   end, keymap_opt)
 
   vim.keymap.set('x', '<CR>', function()
-    local scallop = Scallop.from_data(vim.t.scallop_data)
-    scallop:execute_command(true)
-    vim.fn.win_execute(scallop._data.edit_winid, "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true), 'silent')
+    if self._living then
+      self:execute_command(true)
+      vim.fn.win_execute(self._data.edit_winid, "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true), 'silent')
+    end
   end, keymap_opt)
 end
 
@@ -346,10 +344,8 @@ function Scallop:start_edit(initial_cmd, does_insert)
   if self._data.edit_bufnr == -1 then
     self:open_edit_window()
     self:init_edit_buffer()
-    self:save()
   elseif self._data.edit_winid == -1 then
     self:open_edit_window()
-    self:save()
   else
     vim.fn.win_gotoid(self._data.edit_winid)
   end
@@ -426,14 +422,12 @@ function Scallop:close_edit()
   if self._data.edit_winid ~= -1 then
     vim.fn.win_execute(self._data.edit_winid, 'stopinsert', 'silent')
     vim.api.nvim_win_close(self._data.edit_winid, true)
-    self:reload()
     self:closed_edit_window()
   end
 end
 
 function Scallop:closed_edit_window()
   self._data.edit_winid = -1
-  self:save()
 
   if self._data.terminal_winid ~= -1 then
     vim.fn.win_gotoid(self._data.terminal_winid)
@@ -443,25 +437,17 @@ end
 local M = {}
 
 function M.start_terminal(cwd)
-  local scallop = nil
-  local scallop_data = vim.t.scallop_data
-  if scallop_data then
-    scallop = Scallop.from_data(scallop_data)
-  else
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
     scallop = Scallop.new()
-    Scallop.tabpage_handles[vim.api.nvim_get_current_tabpage()] = true
   end
   scallop:start_terminal(cwd)
 end
 
 function M.start_terminal_edit(cmd, cwd)
-  local scallop = nil
-  local scallop_data = vim.t.scallop_data
-  if scallop_data then
-    scallop = Scallop.from_data(scallop_data)
-  else
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
     scallop = Scallop.new()
-    Scallop.tabpage_handles[vim.api.nvim_get_current_tabpage()] = true
   end
   scallop:start_terminal(cwd)
   scallop:start_edit(cmd)
@@ -470,26 +456,21 @@ end
 vim.api.nvim_create_autocmd('TabClosed', {
   group = vim.api.nvim_create_augroup('scallop-settings', { clear = true }),
   callback = function()
-    for tabpage, _ in pairs(Scallop.tabpage_handles) do
-      Scallop.tabpage_handles[tabpage] = false
+    local tabpage_livings = {}
+    for tabpage, _ in pairs(Scallop.tabpage_scallops) do
+      tabpage_livings[tabpage] = false
     end
 
     for _, tabpage in pairs(vim.api.nvim_list_tabpages()) do
-      if Scallop.tabpage_handles[tabpage] ~= nil then
-        Scallop.tabpage_handles[tabpage] = true
+      if tabpage_livings[tabpage] ~= nil then
+        tabpage_livings[tabpage] = Scallop.tabpage_scallops[tabpage]._living
       end
     end
 
-    for tabpage, living in pairs(Scallop.tabpage_handles) do
+    for tabpage, living in pairs(tabpage_livings) do
       if not living then
-        local scallop_data = vim.t[tabpage].scallop_data
-        if scallop_data ~= nil then
-          local scallop = Scallop.from_data(scallop_data)
-          scallop:terminate()
-          vim.t[tabpage].scallop_data = nil
-        end
-
-        Scallop.tabpage_handles[tabpage] = nil
+        local scallop = Scallop.tabpage_scallops[tabpage]
+        scallop:terminate()
       end
     end
   end,
