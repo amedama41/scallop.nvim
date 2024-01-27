@@ -11,7 +11,11 @@ local sorters = require 'telescope.sorters'
 local async_oneshot_finder = require "telescope.finders.async_oneshot_finder"
 local make_entry = require "telescope.make_entry"
 
-local shell_histories = function(edit_histories, history_filepath, opts, callback)
+---@param edit_histories string[]
+---@param history_filepath string
+---@param opts table
+---@param callback fun(string)
+local function shell_histories(edit_histories, history_filepath, opts, callback)
   history_filepath = vim.fn.expand(history_filepath)
   opts = opts or {}
 
