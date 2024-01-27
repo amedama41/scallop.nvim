@@ -66,7 +66,21 @@ function Scallop:jobsend(cmd, options)
     cmd = cmd .. vim.api.nvim_replace_termcodes("<CR>", true, true, true)
   end
 
-  vim.fn.chansend(self._terminal_job_id, cmd)
+  local cmd_len = #cmd
+  local total_send_len = 0
+  local failed = 0
+  while total_send_len < cmd_len do
+    local send_len = vim.fn.chansend(self._terminal_job_id, cmd:sub(total_send_len + 1, cmd_len))
+    if send_len == 0 then
+      failed = failed + 1
+      if failed > 10 then
+        break
+      end
+    else
+      failed = 0
+      total_send_len = total_send_len + send_len
+    end
+  end
 end
 
 ---@private
