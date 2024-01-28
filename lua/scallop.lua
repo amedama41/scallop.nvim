@@ -407,6 +407,11 @@ function Scallop:init_edit_buffer()
       self:execute_command(false)
     end
   end, keymap_opt)
+  vim.keymap.set('n', '<C-g>', function()
+    if self._living then
+      self:scroll_to_bottom()
+    end
+  end, keymap_opt)
   vim.keymap.set('n', '<C-n>', function()
     if self._living then
       self:jump_to_prompt('forward')
@@ -433,16 +438,28 @@ function Scallop:init_edit_buffer()
     end
   end, keymap_opt)
 
-  vim.keymap.set('i', '<C-c>', function()
+  vim.keymap.set('i', '<C-g>', function()
     if self._living then
-      self:send_ctrl('<C-c>')
+      local char = vim.fn.getcharstr()
+      self:send_ctrl(char)
     end
   end, keymap_opt)
-  vim.keymap.set('i', '<C-d>', function()
+  vim.keymap.set('i', '<C-g><C-g>', function()
     if self._living then
-      self:send_ctrl('<C-d>')
+      self:scroll_to_bottom()
     end
   end, keymap_opt)
+  vim.keymap.set('i', '<C-g><C-n>', function()
+    if self._living then
+      self:jump_to_prompt('forward')
+    end
+  end, keymap_opt)
+  vim.keymap.set('i', '<C-g><C-p>', function()
+    if self._living then
+      self:jump_to_prompt('backward')
+    end
+  end, keymap_opt)
+
   vim.keymap.set({ 'n', 'i' }, '<C-k>', function()
     if self._living then
       shell_histories(self:get_edit_all_lines(), self._options.history_filepath,
@@ -533,6 +550,13 @@ function Scallop:start_edit(initial_cmd, does_insert)
 end
 
 ---@private
+function Scallop:scroll_to_bottom()
+  if self._terminal_winid ~= -1 then
+    vim.fn.win_execute(self._terminal_winid, 'normal! G', 'silent')
+  end
+end
+
+---@private
 ---@param is_select boolean
 function Scallop:execute_command(is_select)
   if self._edit_bufnr == -1 or self._edit_winid == -1 then
@@ -547,8 +571,7 @@ function Scallop:execute_command(is_select)
   end
   self:jobsend(cmd, { cleanup = true, newline = true })
 
-  -- Scroll terminal to bottom
-  vim.fn.win_execute(self._terminal_winid, 'normal! G', 'silent')
+  self:scroll_to_bottom()
 
   local last_line = self:get_edit_line('$')
   if last_line ~= cmd then
