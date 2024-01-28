@@ -2,8 +2,9 @@ local configs = require('scallop.configs')
 local shell_histories = require('telescope.shell_histories')
 
 ---@class Scallop
----@field private _terminal_job_id integer
----@field private _terminal_bufnr integer
+---@field private _active_terminal_index integer
+---@field private _prev_terminal_index integer
+---@field private _terminals { job_id: integer, bufnr: integer }[]
 ---@field private _terminal_winid integer
 ---@field private _edit_bufnr integer
 ---@field private _edit_winid integer
@@ -18,8 +19,18 @@ Scallop.tabpage_scallops = {}
 
 function Scallop.new()
   local self = setmetatable({
-    _terminal_job_id = -1,
-    _terminal_bufnr = -1,
+    _active_terminal_index = 1,
+    _prev_terminal_index = 1,
+    _terminals = {
+      {
+        job_id = -1,
+        bufnr = -1,
+      },
+      {
+        job_id = -1,
+        bufnr = -1,
+      },
+    },
     _terminal_winid = -1,
     _edit_bufnr = -1,
     _edit_winid = -1,
@@ -35,15 +46,20 @@ function Scallop.new()
 end
 
 function Scallop:terminate()
-  if self._terminal_job_id ~= -1 then
-    vim.fn.jobstop(self._terminal_job_id)
-    self._terminal_job_id = -1
+  for _, terminal in pairs(self._terminals) do
+    if terminal.job_id ~= -1 then
+      vim.fn.jobstop(terminal.job_id)
+      terminal.job_id = -1
+    end
+
+    if terminal.bufnr ~= -1 then
+      vim.api.nvim_buf_delete(terminal.bufnr, { force = true })
+      terminal.bufnr = -1
+    end
   end
 
-  if self._terminal_bufnr ~= -1 then
-    vim.api.nvim_buf_delete(self._terminal_bufnr, { force = true })
-    self._terminal_bufnr = -1
-  end
+  self._active_terminal_index = 1
+  self._prev_terminal_index = 1
 
   self:delete_edit_buffer()
 
@@ -52,10 +68,82 @@ function Scallop:terminate()
 end
 
 ---@private
+function Scallop:switch_terminal()
+  local current_active_index = self._active_terminal_index
+  if self._prev_terminal_index == current_active_index then
+    local next_index = (self._active_terminal_index + 1) % #self._terminals
+    if next_index == 0 then
+      next_index = #self._terminals
+    end
+
+    if next_index == current_active_index then
+      return
+    end
+
+    self._active_terminal_index = next_index
+    self._prev_terminal_index = current_active_index
+
+    local terminal = self:active_terminal()
+    terminal.bufnr = vim.fn.bufadd('')
+    vim.api.nvim_win_set_buf(self._terminal_winid, terminal.bufnr)
+    vim.api.nvim_win_call(self._terminal_winid, function()
+      self:init_terminal_buffer()
+    end)
+  else
+    self._active_terminal_index = self._prev_terminal_index
+    self._prev_terminal_index = current_active_index
+    local terminal = self:active_terminal()
+    vim.api.nvim_win_set_buf(self._terminal_winid, terminal.bufnr)
+
+    if self._edit_winid ~= -1 then
+      local cwd = self:get_terminal_cwd()
+      vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, 'silent')
+    end
+  end
+end
+
+---@private
+function Scallop:active_terminal()
+  return self._terminals[self._active_terminal_index]
+end
+
+---@private
+function Scallop:set_active_terminal()
+  if self._prev_terminal_index ~= self._active_terminal_index then
+    self._active_terminal_index = self._prev_terminal_index
+    self:set_prev_terminal()
+    if self._terminal_winid ~= -1 then
+      local terminal = self:active_terminal()
+      vim.api.nvim_win_set_buf(self._terminal_winid, terminal.bufnr)
+    end
+  else
+    self._active_terminal_index = 1
+    self._prev_terminal_index = 1
+  end
+end
+
+---@private
+function Scallop:set_prev_terminal()
+  local num_terminals = #self._terminals
+  for i = 1, num_terminals do
+    local index = (self._active_terminal_index - i + num_terminals) % num_terminals
+    if index == 0 then
+      index = num_terminals
+    end
+    if self._terminals[index].bufnr ~= -1 then
+      self._prev_terminal_index = index
+      return
+    end
+  end
+  self._prev_terminal_index = self._active_terminal_index
+end
+
+---@private
 ---@param cmd string
 ---@param options { cleanup: boolean, newline: boolean }
 function Scallop:jobsend(cmd, options)
-  if self._terminal_job_id == -1 then
+  local terminal = self:active_terminal()
+  if terminal.job_id == -1 then
     return
   end
 
@@ -70,7 +158,7 @@ function Scallop:jobsend(cmd, options)
   local total_send_len = 0
   local failed = 0
   while total_send_len < cmd_len do
-    local send_len = vim.fn.chansend(self._terminal_job_id, cmd:sub(total_send_len + 1, cmd_len))
+    local send_len = vim.fn.chansend(terminal.job_id, cmd:sub(total_send_len + 1, cmd_len))
     if send_len == 0 then
       failed = failed + 1
       if failed > 10 then
@@ -86,11 +174,12 @@ end
 ---@private
 ---@private
 function Scallop:open_terminal_window()
-  if self._terminal_bufnr == -1 then
-    self._terminal_bufnr = vim.fn.bufadd('')
+  local terminal = self:active_terminal()
+  if terminal.bufnr == -1 then
+    terminal.bufnr = vim.fn.bufadd('')
   end
 
-  self._terminal_winid = vim.api.nvim_open_win(self._terminal_bufnr, true, {
+  self._terminal_winid = vim.api.nvim_open_win(terminal.bufnr, true, {
     relative = 'editor',
     row = 1,
     col = 1,
@@ -113,27 +202,47 @@ end
 ---@private
 ---@param cwd? string
 function Scallop:init_terminal_buffer(cwd)
+  local terminal = self:active_terminal()
   if cwd ~= nil and vim.fn.isdirectory(cwd) then
-    self._terminal_job_id = vim.fn.termopen(vim.o.shell, { cwd = cwd })
+    terminal.job_id = vim.fn.termopen(vim.o.shell, { cwd = cwd })
   else
-    self._terminal_job_id = vim.fn.termopen(vim.o.shell)
+    terminal.job_id = vim.fn.termopen(vim.o.shell)
   end
 
+  local this_terminal_index = self._active_terminal_index
+
   vim.api.nvim_create_autocmd('TermClose', {
-    buffer = self._terminal_bufnr,
+    buffer = terminal.bufnr,
     callback = function()
       if not self._living then
         return
       end
 
-      vim.fn.win_execute(self._terminal_winid, 'stopinsert', 'silent')
+      local close_all_terminals = (self._prev_terminal_index == self._active_terminal_index)
 
-      self._terminal_job_id = -1
-      self:terminate()
+      if close_all_terminals or self._terminal_winid == vim.api.nvim_get_current_win() then
+        vim.fn.win_execute(self._terminal_winid, 'stopinsert', 'silent')
+      end
+
+      local bufnr = terminal.bufnr
+      terminal.job_id = -1
+      terminal.bufnr = -1
+
+      if this_terminal_index == self._active_terminal_index then
+        self:set_active_terminal()
+      elseif this_terminal_index == self._prev_terminal_index then
+        self:set_prev_terminal()
+      end
+
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+
+      if close_all_terminals then
+        self:terminate()
+      end
     end,
   })
 
-  local keymap_opt = { buffer = self._terminal_bufnr }
+  local keymap_opt = { buffer = terminal.bufnr }
 
   vim.keymap.set('n', 'q', function()
     if self._living then
@@ -147,15 +256,21 @@ function Scallop:init_terminal_buffer(cwd)
     end
   end, keymap_opt)
 
-  vim.keymap.set('n', '<C-n>', function()
+  vim.keymap.set({ 'n', 'x' }, '<C-n>', function()
     if self._living then
       self:jump_to_prompt('forward')
     end
   end, keymap_opt)
 
-  vim.keymap.set('n', '<C-p>', function()
+  vim.keymap.set({ 'n', 'x' }, '<C-p>', function()
     if self._living then
       self:jump_to_prompt('backward')
+    end
+  end, keymap_opt)
+
+  vim.keymap.set('n', '<C-^>', function()
+    if self._living then
+      self:switch_terminal()
     end
   end, keymap_opt)
 end
@@ -164,7 +279,8 @@ end
 ---@param cwd? string
 function Scallop:start_terminal(cwd)
   self._prev_winid = vim.fn.win_getid()
-  if self._terminal_bufnr == -1 then
+  local terminal = self:active_terminal()
+  if terminal.bufnr == -1 then
     self:open_terminal_window()
     self:init_terminal_buffer(cwd)
   elseif self._terminal_winid == -1 then
@@ -198,8 +314,9 @@ end
 ---@private
 ---@return string
 function Scallop:get_terminal_cwd()
+  local terminal = self:active_terminal()
   if vim.fn.executable('lsof') then
-    local cmd = { 'lsof', '-a', '-d', 'cwd', '-p', tostring(vim.fn.jobpid(self._terminal_job_id)) }
+    local cmd = { 'lsof', '-a', '-d', 'cwd', '-p', tostring(vim.fn.jobpid(terminal.job_id)) }
     local stdout = vim.fn.system(table.concat(cmd, ' '))
     local cwd = vim.fn.matchstr(stdout, 'cwd\\s\\+\\S\\+\\s\\+\\S\\+\\s\\+\\S\\+\\s\\+\\S\\+\\s\\+\\zs.\\+\\ze\\n')
     if vim.fn.isdirectory(cwd) then
@@ -223,7 +340,8 @@ function Scallop:jump_to_prompt(direction)
     flags = 'benWz'
   end
 
-  local search_pos = vim.api.nvim_buf_call(self._terminal_bufnr, function()
+  local terminal = self:active_terminal()
+  local search_pos = vim.api.nvim_buf_call(terminal.bufnr, function()
     return vim.fn.searchpos('^' .. self._options.prompt_pattern, flags)
   end)
 
@@ -250,7 +368,8 @@ end
 ---@private
 function Scallop:open_edit_window()
   if self._edit_bufnr == -1 then
-    self._edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.fn.bufname(self._terminal_bufnr))
+    local terminal = self:active_terminal()
+    self._edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.fn.bufname(terminal.bufnr))
   end
 
   self._edit_winid = vim.api.nvim_open_win(self._edit_bufnr, true, {
@@ -283,7 +402,7 @@ function Scallop:init_edit_buffer()
 
   local keymap_opt = { buffer = self._edit_bufnr }
 
-  vim.keymap.set('n', '<CR>', function()
+  vim.keymap.set({ 'n', 'i' }, '<CR>', function()
     if self._living then
       self:execute_command(false)
     end
@@ -303,22 +422,17 @@ function Scallop:init_edit_buffer()
       self:close_edit()
     end
   end, keymap_opt)
-  vim.keymap.set('n', '<C-q>', function()
+  vim.keymap.set({ 'n', 'i' }, '<C-q>', function()
     if self._living then
       self:close_terminal()
     end
   end, keymap_opt)
-  vim.keymap.set('i', '<C-q>', function()
+  vim.keymap.set({ 'n', 'i' }, '<C-^>', function()
     if self._living then
-      self:close_terminal()
+      self:switch_terminal()
     end
   end, keymap_opt)
 
-  vim.keymap.set('i', '<CR>', function()
-    if self._living then
-      self:execute_command(false)
-    end
-  end, keymap_opt)
   vim.keymap.set('i', '<C-c>', function()
     if self._living then
       self:send_ctrl('<C-c>')
@@ -329,25 +443,20 @@ function Scallop:init_edit_buffer()
       self:send_ctrl('<C-d>')
     end
   end, keymap_opt)
-  vim.keymap.set('n', '<C-k>', function()
+  vim.keymap.set({ 'n', 'i' }, '<C-k>', function()
     if self._living then
-      shell_histories(self:get_edit_all_lines(), self._options.history_filepath, { default_text = self:get_edit_line('.') }, function(cmd)
-        vim.defer_fn(function() self:start_edit(cmd, true) end, 0)
-      end)
-    end
-  end, keymap_opt)
-  vim.keymap.set('i', '<C-k>', function()
-    if self._living then
-      shell_histories(self:get_edit_all_lines(), self._options.history_filepath, { default_text = self:get_edit_line('.') }, function(cmd)
-        vim.defer_fn(function() self:start_edit(cmd, true) end, 0)
-      end)
+      shell_histories(self:get_edit_all_lines(), self._options.history_filepath,
+        { default_text = self:get_edit_line('.') }, function(cmd)
+          vim.defer_fn(function() self:start_edit(cmd, true) end, 0)
+        end)
     end
   end, keymap_opt)
 
   vim.keymap.set('x', '<CR>', function()
     if self._living then
       self:execute_command(true)
-      vim.fn.win_execute(self._edit_winid, "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true), 'silent')
+      vim.fn.win_execute(self._edit_winid, "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true),
+        'silent')
     end
   end, keymap_opt)
 end
