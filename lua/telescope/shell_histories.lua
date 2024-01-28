@@ -45,7 +45,7 @@ local function shell_histories(edit_histories, history_filepath, opts, callback)
         }
       end,
     },
-    sorter = sorters.fuzzy_with_index_bias(opts),
+    sorter = sorters.get_substr_matcher(opts),
     attach_mappings = function(prompt_bufnr, map)
       actions.select_default:replace(function()
         actions.close(prompt_bufnr)
