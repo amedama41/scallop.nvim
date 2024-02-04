@@ -407,21 +407,6 @@ function Scallop:init_edit_buffer()
       self:execute_command(false)
     end
   end, keymap_opt)
-  vim.keymap.set('n', '<C-g>', function()
-    if self._living then
-      self:scroll_to_bottom()
-    end
-  end, keymap_opt)
-  vim.keymap.set('n', '<C-n>', function()
-    if self._living then
-      self:jump_to_prompt('forward')
-    end
-  end, keymap_opt)
-  vim.keymap.set('n', '<C-p>', function()
-    if self._living then
-      self:jump_to_prompt('backward')
-    end
-  end, keymap_opt)
   vim.keymap.set('n', 'q', function()
     if self._living then
       self:close_edit()
@@ -438,23 +423,23 @@ function Scallop:init_edit_buffer()
     end
   end, keymap_opt)
 
-  vim.keymap.set('i', '<C-g>', function()
+  vim.keymap.set({ 'n', 'i' }, '<C-g>', function()
     if self._living then
       local char = vim.fn.getcharstr()
       self:send_ctrl(char)
     end
   end, keymap_opt)
-  vim.keymap.set('i', '<C-g><C-g>', function()
+  vim.keymap.set({ 'n', 'i' }, '<C-g><C-g>', function()
     if self._living then
       self:scroll_to_bottom()
     end
   end, keymap_opt)
-  vim.keymap.set('i', '<C-g><C-n>', function()
+  vim.keymap.set({ 'n', 'i' }, '<C-g><C-n>', function()
     if self._living then
       self:jump_to_prompt('forward')
     end
   end, keymap_opt)
-  vim.keymap.set('i', '<C-g><C-p>', function()
+  vim.keymap.set({ 'n', 'i' }, '<C-g><C-p>', function()
     if self._living then
       self:jump_to_prompt('backward')
     end
