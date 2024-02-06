@@ -425,23 +425,24 @@ function Scallop:init_edit_buffer()
 
   vim.keymap.set({ 'n', 'i' }, '<C-g>', function()
     if self._living then
-      local char = vim.fn.getcharstr()
-      self:send_ctrl(char)
-    end
-  end, keymap_opt)
-  vim.keymap.set({ 'n', 'i' }, '<C-g><C-g>', function()
-    if self._living then
-      self:scroll_to_bottom()
-    end
-  end, keymap_opt)
-  vim.keymap.set({ 'n', 'i' }, '<C-g><C-n>', function()
-    if self._living then
-      self:jump_to_prompt('forward')
-    end
-  end, keymap_opt)
-  vim.keymap.set({ 'n', 'i' }, '<C-g><C-p>', function()
-    if self._living then
-      self:jump_to_prompt('backward')
+      local ok, char = pcall(vim.fn.getcharstr)
+      if not ok then
+        if char == 'Keyboard interrupt' then
+          char = vim.api.nvim_replace_termcodes("<C-c>", true, true, true)
+        else
+          print(":" .. char .. ":")
+          return
+        end
+      end
+      if char == vim.api.nvim_replace_termcodes("<C-g>", true, true, true) then
+        self:scroll_to_bottom()
+      elseif char == vim.api.nvim_replace_termcodes("<C-n>", true, true, true) then
+        self:jump_to_prompt('forward')
+      elseif char == vim.api.nvim_replace_termcodes("<C-p>", true, true, true) then
+        self:jump_to_prompt('backward')
+      else
+        self:send_ctrl(char)
+      end
     end
   end, keymap_opt)
 
