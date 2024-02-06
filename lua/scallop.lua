@@ -641,7 +641,7 @@ function M.start_terminal_edit(cmd, cwd)
 end
 
 vim.api.nvim_create_autocmd('TabClosed', {
-  group = vim.api.nvim_create_augroup('scallop-settings', { clear = true }),
+  group = vim.api.nvim_create_augroup('scallop-internal-auto-group', { clear = true }),
   callback = function()
     local tabpage_livings = {}
     for tabpage, _ in pairs(Scallop.tabpage_scallops) do
