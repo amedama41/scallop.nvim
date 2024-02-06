@@ -7,6 +7,7 @@ M.configs = {
     cleanup_key_sequence = '<C-k><C-u>',
     floating_border = 'rounded',
     edit_filetype = 'bash',
+    edit_win_options = {},
   },
   mappings = {
     normal = {

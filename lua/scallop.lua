@@ -188,6 +188,9 @@ function Scallop:open_terminal_window()
     border = self._options.floating_border,
   })
 
+  vim.wo[self._terminal_winid].list = false
+  vim.wo[self._terminal_winid].wrap = false
+
   vim.api.nvim_create_autocmd('WinClosed', {
     pattern = tostring(self._terminal_winid),
     once = true,
@@ -380,6 +383,10 @@ function Scallop:open_edit_window()
     height = 1,
     border = self._options.floating_border,
   })
+
+  for option, value in pairs(self._options.edit_win_options) do
+    pcall(vim.api.nvim_set_option_value, option, value, { win = self._edit_winid })
+  end
 
   vim.api.nvim_create_autocmd('WinClosed', {
     pattern = tostring(self._edit_winid),
