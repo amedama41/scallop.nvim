@@ -424,7 +424,7 @@ function Scallop:init_edit_buffer()
       self:close_terminal()
     end
   end, keymap_opt)
-  vim.keymap.set({ 'n', 'i' }, '<C-^>', function()
+  vim.keymap.set({ 'n' }, '<C-^>', function()
     if self._living then
       self:switch_terminal()
     end
@@ -447,6 +447,8 @@ function Scallop:init_edit_buffer()
         self:jump_to_prompt('forward')
       elseif char == vim.api.nvim_replace_termcodes("<C-p>", true, true, true) then
         self:jump_to_prompt('backward')
+      elseif char == vim.api.nvim_replace_termcodes("<C-^>", true, true, true) then
+        self:switch_terminal()
       else
         self:send_ctrl(char)
       end
@@ -469,6 +471,36 @@ function Scallop:init_edit_buffer()
         'silent')
     end
   end, keymap_opt)
+
+  --- Direct key mapping
+  for code = 65, 90 do
+    local key = ("<C-%s>"):format(string.char(code))
+    vim.keymap.set('l', key, function()
+      if self._living then
+        self:send_ctrl(key)
+      end
+    end, keymap_opt)
+  end
+
+  for code = 32, 127 do
+    local key = string.char(code)
+    vim.keymap.set('l', key, function()
+      if self._living then
+        self:send_ctrl(key)
+      end
+    end, keymap_opt)
+  end
+
+  vim.api.nvim_create_autocmd('InsertLeave', {
+    buffer = self._edit_bufnr,
+    callback = function()
+      if self._edit_bufnr ~= -1 then
+        if vim.bo[self._edit_bufnr].iminsert == 1 then
+          vim.bo[self._edit_bufnr].iminsert = 0
+        end
+      end
+    end,
+  })
 end
 
 ---@private
