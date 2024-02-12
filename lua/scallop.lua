@@ -494,10 +494,8 @@ function Scallop:init_edit_buffer()
   vim.api.nvim_create_autocmd('InsertLeave', {
     buffer = self._edit_bufnr,
     callback = function()
-      if self._edit_bufnr ~= -1 then
-        if vim.bo[self._edit_bufnr].iminsert == 1 then
-          vim.bo[self._edit_bufnr].iminsert = 0
-        end
+      if vim.go.iminsert == 1 then
+        vim.go.iminsert = 0
       end
     end,
   })
