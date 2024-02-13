@@ -497,6 +497,9 @@ function Scallop:init_edit_buffer()
       if vim.go.iminsert == 1 then
         vim.go.iminsert = 0
       end
+      if self._edit_bufnr ~= -1 then
+        vim.bo[self._edit_bufnr].iminsert = 0
+      end
     end,
   })
 end
