@@ -385,7 +385,7 @@ function Scallop:open_edit_window()
   })
 
   for option, value in pairs(self._options.edit_win_options) do
-    pcall(vim.api.nvim_set_option_value, option, value, { win = self._edit_winid })
+    pcall(vim.api.nvim_set_option_value, option, value, { win = self._edit_winid, scope = 'local' })
   end
 
   vim.api.nvim_create_autocmd('WinClosed', {
