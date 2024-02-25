@@ -99,7 +99,7 @@ function Scallop:switch_terminal()
     end)
 
     if self._edit_winid ~= -1 then
-      terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.fn.bufname(terminal.bufnr))
+      terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.api.nvim_buf_get_name(terminal.bufnr))
       vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
       self:set_edit_win_options()
       self:init_edit_buffer()
@@ -112,7 +112,7 @@ function Scallop:switch_terminal()
 
     if self._edit_winid ~= -1 then
       vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
-      self:resize_edit_winheight()
+      self:restore_edit_cursor(terminal.edit_bufnr)
     end
   end
 end
@@ -132,7 +132,7 @@ function Scallop:set_active_terminal()
       vim.api.nvim_win_set_buf(self._terminal_winid, terminal.bufnr)
       if self._edit_winid ~= -1 then
         vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
-        self:resize_edit_winheight()
+        self:restore_edit_cursor(terminal.edit_bufnr)
       end
     end
   else
@@ -225,11 +225,13 @@ end
 ---@param cwd? string
 function Scallop:init_terminal_buffer(cwd)
   local terminal = self:active_terminal()
-  if cwd ~= nil and vim.fn.isdirectory(cwd) then
-    terminal.job_id = vim.fn.termopen(vim.o.shell, { cwd = cwd })
-  else
-    terminal.job_id = vim.fn.termopen(vim.o.shell)
-  end
+  terminal.job_id = vim.api.nvim_buf_call(terminal.bufnr, function()
+    if cwd ~= nil and vim.fn.isdirectory(cwd) then
+      return vim.fn.termopen(vim.o.shell, { cwd = cwd })
+    else
+      return vim.fn.termopen(vim.o.shell)
+    end
+  end)
 
   local this_terminal_index = self._active_terminal_index
 
@@ -345,7 +347,7 @@ function Scallop:get_terminal_cwd()
   if vim.fn.executable('lsof') then
     local cmd = { 'lsof', '-a', '-d', 'cwd', '-p', tostring(vim.fn.jobpid(terminal.job_id)) }
     local stdout = vim.fn.system(table.concat(cmd, ' '))
-    local cwd = vim.fn.matchstr(stdout, 'cwd\\s\\+\\S\\+\\s\\+\\S\\+\\s\\+\\S\\+\\s\\+\\S\\+\\s\\+\\zs.\\+\\ze\\n')
+    local cwd = vim.fn.matchstr(stdout, [[cwd\s\+\S\+\s\+\S\+\s\+\S\+\s\+\S\+\s\+\zs.\+\ze\n]])
     if vim.fn.isdirectory(cwd) then
       return cwd
     end
@@ -406,7 +408,7 @@ end
 function Scallop:open_edit_window()
   local terminal = self:active_terminal()
   if terminal.edit_bufnr == -1 then
-    terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.fn.bufname(terminal.bufnr))
+    terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.api.nvim_buf_get_name(terminal.bufnr))
   end
 
   self._edit_winheight = 1
@@ -544,7 +546,7 @@ function Scallop:init_edit_buffer()
   vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI', 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
     buffer = terminal.edit_bufnr,
     callback = function()
-      if self._living then
+      if self._living and self._edit_winid ~= -1 then
         self:resize_edit_winheight()
       end
     end,
@@ -590,6 +592,14 @@ function Scallop:resize_edit_winheight()
 end
 
 ---@private
+---@param edit_bufnr integer
+function Scallop:restore_edit_cursor(edit_bufnr)
+  local last_pos = vim.api.nvim_buf_get_mark(edit_bufnr, '"')
+  vim.api.nvim_win_set_cursor(self._edit_winid, last_pos)
+  self:resize_edit_winheight()
+end
+
+---@private
 ---@param pos string
 ---@return string
 function Scallop:get_edit_line(pos)
@@ -606,14 +616,14 @@ function Scallop:get_select_lines()
     first, last = last, first
   end
   local terminal = self:active_terminal()
-  return table.concat(vim.fn.getbufline(terminal.edit_bufnr, first, last), '\n')
+  return table.concat(vim.api.nvim_buf_get_lines(terminal.edit_bufnr, first - 1, last, true), '\n')
 end
 
 ---@private
 ---@return string[]
 function Scallop:get_edit_all_lines()
   local terminal = self:active_terminal()
-  return vim.fn.getbufline(terminal.edit_bufnr, 1, "$")
+  return vim.api.nvim_buf_get_lines(terminal.edit_bufnr, 0, -1, true)
 end
 
 ---@package
@@ -626,7 +636,7 @@ function Scallop:start_edit(initial_cmd, does_insert)
     self:init_edit_buffer()
   elseif self._edit_winid == -1 then
     self:open_edit_window()
-    self:resize_edit_winheight()
+    self:restore_edit_cursor(terminal.edit_bufnr)
   else
     vim.fn.win_gotoid(self._edit_winid)
   end
@@ -656,7 +666,7 @@ end
 ---@private
 function Scallop:scroll_to_bottom()
   if self._terminal_winid ~= -1 then
-    vim.fn.win_execute(self._terminal_winid, 'normal! G', 'silent')
+    vim.api.nvim_win_set_cursor(self._terminal_winid, { vim.fn.line('$', self._terminal_winid), 0 })
   end
 end
 
@@ -711,7 +721,7 @@ function Scallop:send_ctrl(ctrl)
   self:jobsend(vim.api.nvim_replace_termcodes(ctrl, true, true, true), { cleanup = false, newline = false })
 
   -- Scroll terminal to bottom
-  vim.fn.win_execute(self._terminal_winid, 'normal! G', 'silent')
+  self:scroll_to_bottom()
 end
 
 ---@private
