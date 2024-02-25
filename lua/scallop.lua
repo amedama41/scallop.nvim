@@ -4,9 +4,8 @@ local shell_histories = require('telescope.shell_histories')
 ---@class Scallop
 ---@field private _active_terminal_index integer
 ---@field private _prev_terminal_index integer
----@field private _terminals { job_id: integer, bufnr: integer }[]
+---@field private _terminals { job_id: integer, bufnr: integer, edit_bufnr: integer }[]
 ---@field private _terminal_winid integer
----@field private _edit_bufnr integer
 ---@field private _edit_winid integer
 ---@field private _edit_winwidth integer
 ---@field private _edit_winheight integer
@@ -28,14 +27,15 @@ function Scallop.new()
       {
         job_id = -1,
         bufnr = -1,
+        edit_bufnr = -1,
       },
       {
         job_id = -1,
         bufnr = -1,
+        edit_bufnr = -1,
       },
     },
     _terminal_winid = -1,
-    _edit_bufnr = -1,
     _edit_winid = -1,
     _edit_winwidth = -1,
     _edit_winheight = -1,
@@ -62,12 +62,14 @@ function Scallop:terminate()
       vim.api.nvim_buf_delete(terminal.bufnr, { force = true })
       terminal.bufnr = -1
     end
+
+    if terminal.edit_bufnr ~= -1 then
+      vim.api.nvim_buf_delete(terminal.edit_bufnr, { force = true })
+    end
   end
 
   self._active_terminal_index = 1
   self._prev_terminal_index = 1
-
-  self:delete_edit_buffer()
 
   self._living = false
   Scallop.tabpage_scallops[self._tabpage_handle] = nil
@@ -95,6 +97,13 @@ function Scallop:switch_terminal()
     vim.api.nvim_win_call(self._terminal_winid, function()
       self:init_terminal_buffer()
     end)
+
+    if self._edit_winid ~= -1 then
+      terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.fn.bufname(terminal.bufnr))
+      vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
+      self:set_edit_win_options()
+      self:init_edit_buffer()
+    end
   else
     self._active_terminal_index = self._prev_terminal_index
     self._prev_terminal_index = current_active_index
@@ -102,8 +111,8 @@ function Scallop:switch_terminal()
     vim.api.nvim_win_set_buf(self._terminal_winid, terminal.bufnr)
 
     if self._edit_winid ~= -1 then
-      local cwd = self:get_terminal_cwd()
-      vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, 'silent')
+      vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
+      self:resize_edit_winheight()
     end
   end
 end
@@ -121,6 +130,10 @@ function Scallop:set_active_terminal()
     if self._terminal_winid ~= -1 then
       local terminal = self:active_terminal()
       vim.api.nvim_win_set_buf(self._terminal_winid, terminal.bufnr)
+      if self._edit_winid ~= -1 then
+        vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
+        self:resize_edit_winheight()
+      end
     end
   else
     self._active_terminal_index = 1
@@ -234,8 +247,10 @@ function Scallop:init_terminal_buffer(cwd)
       end
 
       local bufnr = terminal.bufnr
+      local edit_bufnr = terminal.edit_bufnr
       terminal.job_id = -1
       terminal.bufnr = -1
+      terminal.edit_bufnr = -1
 
       if this_terminal_index == self._active_terminal_index then
         self:set_active_terminal()
@@ -244,6 +259,9 @@ function Scallop:init_terminal_buffer(cwd)
       end
 
       vim.api.nvim_buf_delete(bufnr, { force = true })
+      if edit_bufnr ~= -1 then
+        vim.api.nvim_buf_delete(edit_bufnr, { force = true })
+      end
 
       if close_all_terminals then
         self:terminate()
@@ -375,14 +393,24 @@ function Scallop:closed_terminal_window()
 end
 
 ---@private
+function Scallop:set_edit_win_options()
+  for option, value in pairs(self._options.edit_win_options) do
+    pcall(vim.api.nvim_set_option_value, option, value, { win = self._edit_winid, scope = 'local' })
+  end
+
+  self:set_edit_winwidth()
+  self:set_edit_numberwidth()
+end
+
+---@private
 function Scallop:open_edit_window()
-  if self._edit_bufnr == -1 then
-    local terminal = self:active_terminal()
-    self._edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.fn.bufname(terminal.bufnr))
+  local terminal = self:active_terminal()
+  if terminal.edit_bufnr == -1 then
+    terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.fn.bufname(terminal.bufnr))
   end
 
   self._edit_winheight = 1
-  self._edit_winid = vim.api.nvim_open_win(self._edit_bufnr, true, {
+  self._edit_winid = vim.api.nvim_open_win(terminal.edit_bufnr, true, {
     relative = 'editor',
     row = 1 + vim.o.columns - 6,
     col = 1,
@@ -391,12 +419,7 @@ function Scallop:open_edit_window()
     border = self._options.floating_border,
   })
 
-  for option, value in pairs(self._options.edit_win_options) do
-    pcall(vim.api.nvim_set_option_value, option, value, { win = self._edit_winid, scope = 'local' })
-  end
-
-  self:set_edit_winwidth()
-  self:set_edit_numberwidth()
+  self:set_edit_win_options()
 
   vim.api.nvim_create_autocmd({ 'WinResized' }, {
     pattern = tostring(self._edit_winid),
@@ -419,13 +442,14 @@ end
 
 ---@private
 function Scallop:init_edit_buffer()
-  vim.bo[self._edit_bufnr].bufhidden = 'hide'
-  vim.bo[self._edit_bufnr].buftype = 'nowrite'
-  vim.bo[self._edit_bufnr].buflisted = false
-  vim.bo[self._edit_bufnr].swapfile = false
-  vim.bo[self._edit_bufnr].filetype = self._options.edit_filetype
+  local terminal = self:active_terminal()
+  vim.bo[terminal.edit_bufnr].bufhidden = 'hide'
+  vim.bo[terminal.edit_bufnr].buftype = 'nowrite'
+  vim.bo[terminal.edit_bufnr].buflisted = false
+  vim.bo[terminal.edit_bufnr].swapfile = false
+  vim.bo[terminal.edit_bufnr].filetype = self._options.edit_filetype
 
-  local keymap_opt = { buffer = self._edit_bufnr }
+  local keymap_opt = { buffer = terminal.edit_bufnr }
 
   vim.keymap.set({ 'n', 'i' }, '<CR>', function()
     if self._living then
@@ -518,7 +542,7 @@ function Scallop:init_edit_buffer()
     end,
   })
   vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI', 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
-    buffer = self._edit_bufnr,
+    buffer = terminal.edit_bufnr,
     callback = function()
       if self._living then
         self:resize_edit_winheight()
@@ -526,13 +550,13 @@ function Scallop:init_edit_buffer()
     end,
   })
   vim.api.nvim_create_autocmd('InsertLeave', {
-    buffer = self._edit_bufnr,
+    buffer = terminal.edit_bufnr,
     callback = function()
       if vim.go.iminsert == 1 then
         vim.go.iminsert = 0
       end
-      if self._edit_bufnr ~= -1 then
-        vim.bo[self._edit_bufnr].iminsert = 0
+      if terminal.edit_bufnr ~= -1 then
+        vim.bo[terminal.edit_bufnr].iminsert = 0
       end
     end,
   })
@@ -566,22 +590,11 @@ function Scallop:resize_edit_winheight()
 end
 
 ---@private
-function Scallop:delete_edit_buffer()
-  if self._edit_bufnr ~= -1 then
-    local current_win = vim.fn.win_getid()
-    vim.api.nvim_buf_delete(self._edit_bufnr, { force = true })
-    self._edit_bufnr = -1
-    if current_win == self._edit_winid then
-      vim.fn.win_gotoid(self._terminal_winid)
-    end
-  end
-end
-
----@private
 ---@param pos string
 ---@return string
 function Scallop:get_edit_line(pos)
-  return vim.fn.getbufoneline(self._edit_bufnr, vim.fn.line(pos, self._edit_winid))
+  local terminal = self:active_terminal()
+  return vim.fn.getbufoneline(terminal.edit_bufnr, vim.fn.line(pos, self._edit_winid))
 end
 
 ---@private
@@ -592,20 +605,23 @@ function Scallop:get_select_lines()
   if first > last then
     first, last = last, first
   end
-  return table.concat(vim.fn.getbufline(self._edit_bufnr, first, last), '\n')
+  local terminal = self:active_terminal()
+  return table.concat(vim.fn.getbufline(terminal.edit_bufnr, first, last), '\n')
 end
 
 ---@private
 ---@return string[]
 function Scallop:get_edit_all_lines()
-  return vim.fn.getbufline(self._edit_bufnr, 1, "$")
+  local terminal = self:active_terminal()
+  return vim.fn.getbufline(terminal.edit_bufnr, 1, "$")
 end
 
 ---@package
 ---@param initial_cmd? string
 ---@param does_insert? boolean
 function Scallop:start_edit(initial_cmd, does_insert)
-  if self._edit_bufnr == -1 then
+  local terminal = self:active_terminal()
+  if terminal.edit_bufnr == -1 then
     self:open_edit_window()
     self:init_edit_buffer()
   elseif self._edit_winid == -1 then
@@ -631,7 +647,7 @@ function Scallop:start_edit(initial_cmd, does_insert)
       vim.api.nvim_put({ initial_cmd }, 'c', true, false)
       vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line('.', self._edit_winid), cursor_column })
     else
-      vim.fn.appendbufline(self._edit_bufnr, vim.fn.line('$', self._edit_winid), initial_cmd)
+      vim.fn.appendbufline(terminal.edit_bufnr, vim.fn.line('$', self._edit_winid), initial_cmd)
       vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line('$', self._edit_winid), cursor_column })
     end
   end
@@ -647,7 +663,8 @@ end
 ---@private
 ---@param is_select boolean
 function Scallop:execute_command(is_select)
-  if self._edit_bufnr == -1 or self._edit_winid == -1 then
+  local terminal = self:active_terminal()
+  if terminal.edit_bufnr == -1 or self._edit_winid == -1 then
     return
   end
 
@@ -667,12 +684,12 @@ function Scallop:execute_command(is_select)
     if vim.fn.match(last_line, '^\\s*$') ~= -1 then
       append_line = math.max(append_line - 1, 0)
     end
-    vim.fn.appendbufline(self._edit_bufnr, append_line, cmd)
+    vim.fn.appendbufline(terminal.edit_bufnr, append_line, cmd)
   end
 
   last_line = self:get_edit_line('$')
   if vim.fn.match(last_line, '^\\s*$') == -1 then
-    vim.fn.appendbufline(self._edit_bufnr, vim.fn.line('$', self._edit_winid), '')
+    vim.fn.appendbufline(terminal.edit_bufnr, vim.fn.line('$', self._edit_winid), '')
   end
 
   vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line('$', self._edit_winid), 0 })
@@ -684,7 +701,8 @@ end
 ---@private
 ---@param ctrl string
 function Scallop:send_ctrl(ctrl)
-  if self._edit_bufnr == -1 or self._edit_winid == -1 then
+  local terminal = self:active_terminal()
+  if terminal.edit_bufnr == -1 or self._edit_winid == -1 then
     return
   end
   self:jobsend(vim.api.nvim_replace_termcodes(ctrl, true, true, true), { cleanup = false, newline = false })
