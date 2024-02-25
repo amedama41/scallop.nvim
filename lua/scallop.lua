@@ -8,6 +8,9 @@ local shell_histories = require('telescope.shell_histories')
 ---@field private _terminal_winid integer
 ---@field private _edit_bufnr integer
 ---@field private _edit_winid integer
+---@field private _edit_winwidth integer
+---@field private _edit_winheight integer
+---@field private _edit_numberwidth integer
 ---@field private _prev_winid integer
 ---@field private _options table
 ---@field package _living boolean
@@ -34,6 +37,9 @@ function Scallop.new()
     _terminal_winid = -1,
     _edit_bufnr = -1,
     _edit_winid = -1,
+    _edit_winwidth = -1,
+    _edit_winheight = -1,
+    _edit_numberwidth = 0,
     _prev_winid = -1,
     _options = vim.deepcopy(configs.configs.options),
     _living = true,
@@ -375,6 +381,7 @@ function Scallop:open_edit_window()
     self._edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.fn.bufname(terminal.bufnr))
   end
 
+  self._edit_winheight = 1
   self._edit_winid = vim.api.nvim_open_win(self._edit_bufnr, true, {
     relative = 'editor',
     row = 1 + vim.o.columns - 6,
@@ -388,6 +395,17 @@ function Scallop:open_edit_window()
     pcall(vim.api.nvim_set_option_value, option, value, { win = self._edit_winid, scope = 'local' })
   end
 
+  self:set_edit_winwidth()
+  self:set_edit_numberwidth()
+
+  vim.api.nvim_create_autocmd({ 'WinResized' }, {
+    pattern = tostring(self._edit_winid),
+    callback = function()
+      if self._living then
+        self:set_edit_winwidth()
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd('WinClosed', {
     pattern = tostring(self._edit_winid),
     once = true,
@@ -491,6 +509,22 @@ function Scallop:init_edit_buffer()
     end, keymap_opt)
   end
 
+  vim.api.nvim_create_autocmd({ 'OptionSet' }, {
+    pattern = { 'number', 'relativenumber', 'numberwidth' },
+    callback = function()
+      if self._living and self._edit_winid ~= -1 then
+        self:set_edit_numberwidth()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI', 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
+    buffer = self._edit_bufnr,
+    callback = function()
+      if self._living then
+        self:resize_edit_winheight()
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd('InsertLeave', {
     buffer = self._edit_bufnr,
     callback = function()
@@ -502,6 +536,33 @@ function Scallop:init_edit_buffer()
       end
     end,
   })
+end
+
+---@private
+function Scallop:set_edit_numberwidth()
+  if vim.wo[self._edit_winid].number or vim.wo[self._edit_winid].relativenumber then
+    self._edit_numberwidth = vim.wo[self._edit_winid].numberwidth
+  else
+    self._edit_numberwidth = 0
+  end
+end
+
+---@private
+function Scallop:set_edit_winwidth()
+  self._edit_winwidth = vim.api.nvim_win_get_width(self._edit_winid)
+end
+
+---@private
+function Scallop:resize_edit_winheight()
+  if vim.wo[self._edit_winid].wrap then
+    local virtcol = vim.fn.virtcol("$")
+    local winwidth = self._edit_winwidth - self._edit_numberwidth
+    local winheight = math.ceil(virtcol / winwidth)
+    if self._edit_winheight ~= winheight then
+      self._edit_winheight = winheight
+      vim.api.nvim_win_set_height(self._edit_winid, winheight)
+    end
+  end
 end
 
 ---@private
@@ -549,6 +610,7 @@ function Scallop:start_edit(initial_cmd, does_insert)
     self:init_edit_buffer()
   elseif self._edit_winid == -1 then
     self:open_edit_window()
+    self:resize_edit_winheight()
   else
     vim.fn.win_gotoid(self._edit_winid)
   end
