@@ -678,19 +678,22 @@ function Scallop:execute_command(is_select)
 
   self:scroll_to_bottom()
 
-  local last_line = self:get_edit_line('$')
-  if last_line ~= cmd then
-    local append_line = vim.fn.line('$', self._edit_winid)
-    if vim.fn.match(last_line, '^\\s*$') ~= -1 then
-      append_line = math.max(append_line - 1, 0)
+  local last_lnum = vim.fn.line('$', self._edit_winid)
+  for lnum = last_lnum, 0, -1 do
+    local line = vim.fn.getbufoneline(terminal.edit_bufnr, lnum)
+    if vim.fn.match(line, [[^\s*$]]) == -1 then
+      if lnum ~= last_lnum then
+        vim.fn.deletebufline(terminal.edit_bufnr, lnum + 1, last_lnum)
+      end
+
+      if line ~= cmd then
+        vim.fn.appendbufline(terminal.edit_bufnr, lnum, cmd)
+      end
+      break
     end
-    vim.fn.appendbufline(terminal.edit_bufnr, append_line, cmd)
   end
 
-  last_line = self:get_edit_line('$')
-  if vim.fn.match(last_line, '^\\s*$') == -1 then
-    vim.fn.appendbufline(terminal.edit_bufnr, vim.fn.line('$', self._edit_winid), '')
-  end
+  vim.fn.appendbufline(terminal.edit_bufnr, vim.fn.line('$', self._edit_winid), '')
 
   vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line('$', self._edit_winid), 0 })
 
