@@ -97,20 +97,21 @@ function Scallop:switch_terminal()
     vim.api.nvim_win_call(self._terminal_winid, function()
       self:init_terminal_buffer()
     end)
-
-    if self._edit_winid ~= -1 then
-      terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.api.nvim_buf_get_name(terminal.bufnr))
-      vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
-      self:set_edit_win_options()
-      self:init_edit_buffer()
-    end
   else
     self._active_terminal_index = self._prev_terminal_index
     self._prev_terminal_index = current_active_index
     local terminal = self:active_terminal()
     vim.api.nvim_win_set_buf(self._terminal_winid, terminal.bufnr)
+  end
 
-    if self._edit_winid ~= -1 then
+  if self._edit_winid ~= -1 then
+    local terminal = self:active_terminal()
+    if terminal.edit_bufnr == -1 then
+      terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.api.nvim_buf_get_name(terminal.bufnr))
+      vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
+      self:set_edit_win_options()
+      self:init_edit_buffer()
+    else
       vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
       self:restore_edit_cursor(terminal.edit_bufnr)
     end
