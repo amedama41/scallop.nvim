@@ -58,9 +58,16 @@ local function shell_histories(edit_histories, history_filepath, history_filter,
     sorter = sorters.get_substr_matcher(opts),
     attach_mappings = function(prompt_bufnr, map)
       actions.select_default:replace(function()
-        actions.close(prompt_bufnr)
+        local cmd = ""
         local selection = action_state.get_selected_entry()
-        callback(selection[1])
+        if selection ~= nil then
+          cmd = selection[1]
+        else
+          local picker = action_state.get_current_picker(prompt_bufnr)
+          cmd = vim.fn.getbufoneline(prompt_bufnr, 1):sub(#picker.prompt_prefix + 1)
+        end
+        actions.close(prompt_bufnr)
+        callback(cmd)
       end)
       return true
     end,
