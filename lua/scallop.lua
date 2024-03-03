@@ -502,10 +502,15 @@ function Scallop:init_edit_buffer()
 
   vim.keymap.set({ 'n', 'i' }, '<C-k>', function()
     if self._living then
-      shell_histories(self:get_edit_all_lines(), self._options.history_filepath,
-        { default_text = self:get_edit_line('.') }, function(cmd)
+      shell_histories(
+        self:get_edit_all_lines(),
+        self._options.history_filepath,
+        self._options.history_filter,
+        { default_text = self:get_edit_line('.') },
+        function(cmd)
           vim.defer_fn(function() self:start_edit(cmd, true) end, 0)
-        end)
+        end
+      )
     end
   end, keymap_opt)
 

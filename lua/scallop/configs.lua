@@ -4,6 +4,7 @@ M.configs = {
   options = {
     prompt_pattern = '',
     history_filepath = '',
+    history_filter = function(_) return true end,
     cleanup_key_sequence = '<C-k><C-u>',
     floating_border = 'rounded',
     edit_filetype = 'bash',
