@@ -206,6 +206,7 @@ function Scallop:open_terminal_window()
     width = vim.o.columns - 6,
     height = vim.o.lines - 6,
     border = self._options.floating_border,
+    zindex = 11,
   })
 
   vim.wo[self._terminal_winid].list = false
@@ -420,6 +421,7 @@ function Scallop:open_edit_window()
     width = vim.fn.winwidth(self._terminal_winid),
     height = 1,
     border = self._options.floating_border,
+    zindex = 12,
   })
 
   self:set_edit_win_options()
