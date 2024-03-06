@@ -2,7 +2,7 @@ local source = {}
 
 local default_option = {
   history_filepath = "~/.bash_history",
-  max_display_command_length = 150,
+  max_display_command_length = 80,
 }
 
 function source.new()
@@ -20,7 +20,7 @@ function source:complete(params, callback)
 
   local items = {}
   local duplicated = {}
-  local jobid = vim.fn.jobstart({ "tail", "-r", history_filepath }, {
+  local jobid = vim.fn.jobstart({ "cat", history_filepath }, {
     clear_env = true,
     detach = false,
     on_stdout = function(_, data, _)
