@@ -2,7 +2,6 @@ local source = {}
 
 local default_option = {
   history_filepath = "~/.bash_history",
-  max_display_command_length = 80,
 }
 
 function source.new()
@@ -16,31 +15,35 @@ end
 function source:complete(params, callback)
   local option = vim.tbl_extend("keep", params.option, default_option)
   local history_filepath = vim.fn.expand(option.history_filepath)
-  local max_display_command_length = option.max_display_command_length
 
-  local items = {}
-  local duplicated = {}
-  local jobid = vim.fn.jobstart({ "cat", history_filepath }, {
-    clear_env = true,
-    detach = false,
-    on_stdout = function(_, data, _)
-      for _, line in pairs(data) do
-        if line and not duplicated[line] then
-          duplicated[line] = true
-          local label = line
-          if #label > max_display_command_length then
-            label = line:sub(1, max_display_command_length) .. "..."
-          end
-          items[#items + 1] = { label = label, insertText = line, kind = 1 }
-        end
-      end
-      callback({ items = items })
-    end,
-    stdout_buffered = true,
-  })
-  if jobid <= 0 then
+  local fd = vim.loop.fs_open(history_filepath, "r", 0)
+  if fd == nil then
     return callback()
   end
+
+  local stat = vim.loop.fs_fstat(fd)
+  if stat == nil then
+    vim.loop.fs_close(stat)
+    return callback()
+  end
+
+  vim.loop.fs_read(fd, stat.size, nil, function(err, data)
+    vim.loop.fs_close(fd)
+    if err ~= nil then
+      callback()
+    end
+    local lines = vim.split(data, "\n", { plain = true })
+    local items = {}
+    local duplicated = {}
+    for i = #lines, 1, -1 do
+      local line = lines[i]
+      if line and not duplicated[line] then
+        duplicated[line] = true
+        items[#items + 1] = { label = line, kind = 1 }
+      end
+    end
+    callback({ items = items })
+  end)
 end
 
 return source
