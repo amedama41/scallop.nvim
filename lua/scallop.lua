@@ -316,7 +316,11 @@ end
 ---@package
 ---@param cwd? string
 function Scallop:start_terminal(cwd)
-  self._prev_winid = vim.fn.win_getid()
+  ---@type integer
+  local cur_winid = vim.fn.win_getid()
+  if cur_winid ~= self._terminal_winid and cur_winid ~= self._edit_winid then
+    self._prev_winid = cur_winid
+  end
   local terminal = self:active_terminal()
   if terminal.bufnr == -1 then
     self:open_terminal_window()
