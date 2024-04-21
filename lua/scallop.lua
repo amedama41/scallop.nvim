@@ -19,6 +19,13 @@ Scallop.__index = Scallop
 ---@type table<unknown, Scallop>
 Scallop.tabpage_scallops = {}
 
+---Return edit buffer name
+---@param job_id integer
+---@return string
+local function get_edit_buf_name(job_id)
+  return 'scallop-edit@' .. vim.fn.jobpid(job_id)
+end
+
 function Scallop.new()
   local self = setmetatable({
     _active_terminal_index = 1,
@@ -107,7 +114,7 @@ function Scallop:switch_terminal()
   if self._edit_winid ~= -1 then
     local terminal = self:active_terminal()
     if terminal.edit_bufnr == -1 then
-      terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.api.nvim_buf_get_name(terminal.bufnr))
+      terminal.edit_bufnr = vim.fn.bufadd(get_edit_buf_name(terminal.job_id))
       vim.api.nvim_win_set_buf(self._edit_winid, terminal.edit_bufnr)
       self:set_edit_win_options()
       self:init_edit_buffer()
@@ -410,7 +417,7 @@ end
 function Scallop:open_edit_window()
   local terminal = self:active_terminal()
   if terminal.edit_bufnr == -1 then
-    terminal.edit_bufnr = vim.fn.bufadd('scallop-edit@' .. vim.api.nvim_buf_get_name(terminal.bufnr))
+    terminal.edit_bufnr = vim.fn.bufadd(get_edit_buf_name(terminal.job_id))
   end
 
   self._edit_winheight = 1
