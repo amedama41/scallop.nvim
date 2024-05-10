@@ -70,7 +70,7 @@ function Scallop:terminate()
       terminal.bufnr = -1
     end
 
-    if terminal.edit_bufnr ~= -1 then
+    if terminal.edit_bufnr ~= -1 and vim.api.nvim_buf_is_valid(terminal.edit_bufnr) then
       vim.api.nvim_buf_delete(terminal.edit_bufnr, { force = true })
     end
   end
@@ -270,7 +270,7 @@ function Scallop:init_terminal_buffer(cwd)
       end
 
       vim.api.nvim_buf_delete(bufnr, { force = true })
-      if edit_bufnr ~= -1 then
+      if edit_bufnr ~= -1 and vim.api.nvim_buf_is_valid(edit_bufnr) then
         vim.api.nvim_buf_delete(edit_bufnr, { force = true })
       end
 
@@ -579,6 +579,12 @@ function Scallop:init_edit_buffer()
       if terminal.edit_bufnr ~= -1 then
         vim.bo[terminal.edit_bufnr].iminsert = 0
       end
+    end,
+  })
+  vim.api.nvim_create_autocmd('BufDelete', {
+    buffer = terminal.edit_bufnr,
+    callback = function()
+      terminal.edit_bufnr = -1
     end,
   })
 end
