@@ -530,8 +530,6 @@ function Scallop:init_edit_buffer()
   vim.keymap.set('x', '<CR>', function()
     if self._living then
       self:execute_command(true)
-      vim.fn.win_execute(self._edit_winid, "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true),
-        'silent')
     end
   end, keymap_opt)
 
@@ -633,15 +631,20 @@ function Scallop:get_edit_line(pos)
 end
 
 ---@private
----@return string
-function Scallop:get_select_lines()
-  local first = vim.fn.line("v", self._edit_winid)
-  local last = vim.fn.line(".", self._edit_winid)
-  if first > last then
-    first, last = last, first
+---@param is_select boolean
+---@return number, number
+function Scallop:get_command_range(is_select)
+  if is_select then
+    local start_line = vim.fn.line("v", self._edit_winid)
+    local end_line = vim.fn.line(".", self._edit_winid)
+    if start_line > end_line then
+      start_line, end_line = end_line, start_line
+    end
+    return start_line - 1, end_line
+  else
+    local line = vim.fn.line(".", self._edit_winid)
+    return line - 1, line
   end
-  local terminal = self:active_terminal()
-  return table.concat(vim.api.nvim_buf_get_lines(terminal.edit_bufnr, first - 1, last, true), '\n')
 end
 
 ---@private
@@ -703,34 +706,38 @@ function Scallop:execute_command(is_select)
     return
   end
 
-  local cmd
-  if is_select then
-    cmd = self:get_select_lines()
-  else
-    cmd = self:get_edit_line('.')
-  end
-  self:jobsend(cmd, { cleanup = true, newline = true })
+  local start_lnum, end_lnum = self:get_command_range(is_select)
+  local cmds = vim.api.nvim_buf_get_lines(terminal.edit_bufnr, start_lnum, end_lnum, true)
+  self:jobsend(table.concat(cmds, "\n"), { cleanup = true, newline = true })
 
   self:scroll_to_bottom()
 
-  local last_lnum = vim.fn.line('$', self._edit_winid)
-  for lnum = last_lnum, 0, -1 do
-    local line = vim.fn.getbufoneline(terminal.edit_bufnr, lnum)
-    if vim.fn.match(line, [[^\s*$]]) == -1 then
-      if lnum ~= last_lnum then
-        vim.fn.deletebufline(terminal.edit_bufnr, lnum + 1, last_lnum)
-      end
+  local bottom_lnum = vim.fn.line('$', self._edit_winid)
 
-      if line ~= cmd then
-        vim.fn.appendbufline(terminal.edit_bufnr, lnum, cmd)
+  vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum, -1, true, cmds)
+  vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum + #cmds, -1, true, { '' })
+  if is_select then
+    vim.fn.win_execute(
+      self._edit_winid,
+      "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true),
+      'silent'
+    )
+    vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '<', bottom_lnum + 1, 0, {})
+    vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '>', bottom_lnum + #cmds, #cmds[#cmds] - 1, {})
+  end
+
+  for lnum = bottom_lnum, end_lnum, -1 do
+    local line = vim.api.nvim_buf_get_lines(terminal.edit_bufnr, lnum - 1, lnum, true)
+    if vim.fn.match(line, [[^\s*$]]) == -1 then
+      if lnum ~= bottom_lnum then
+        vim.api.nvim_buf_set_lines(terminal.edit_bufnr, lnum, bottom_lnum, true, {})
       end
       break
     end
   end
+  vim.api.nvim_buf_set_lines(terminal.edit_bufnr, start_lnum, end_lnum, true, {})
 
-  vim.fn.appendbufline(terminal.edit_bufnr, vim.fn.line('$', self._edit_winid), '')
-
-  vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line('$', self._edit_winid), 0 })
+  vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line("$", self._edit_winid), 0 })
 
   local cwd = self:get_terminal_cwd()
   vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, 'silent')
