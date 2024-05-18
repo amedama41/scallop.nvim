@@ -254,7 +254,7 @@ function Scallop:init_terminal_buffer(cwd)
       local close_all_terminals = (self._prev_terminal_index == self._active_terminal_index)
 
       if close_all_terminals or self._terminal_winid == vim.api.nvim_get_current_win() then
-        vim.fn.win_execute(self._terminal_winid, 'stopinsert', 'silent')
+        vim.fn.win_execute(self._terminal_winid, 'stopinsert', true)
       end
 
       local bufnr = terminal.bufnr
@@ -670,9 +670,9 @@ function Scallop:start_edit(initial_cmd, does_insert)
   end
 
   local cwd = self:get_terminal_cwd()
-  vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, 'silent')
+  vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, true)
 
-  vim.fn.win_execute(self._edit_winid, 'startinsert!', 'silent')
+  vim.fn.win_execute(self._edit_winid, 'startinsert!', true)
 
   if initial_cmd ~= nil then
     local cursor_column = 0
@@ -720,7 +720,7 @@ function Scallop:execute_command(is_select)
     vim.fn.win_execute(
       self._edit_winid,
       "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true),
-      'silent'
+      true
     )
     vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '<', bottom_lnum + 1, 0, {})
     vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '>', bottom_lnum + #cmds, #cmds[#cmds] - 1, {})
@@ -740,7 +740,7 @@ function Scallop:execute_command(is_select)
   vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line("$", self._edit_winid), 0 })
 
   local cwd = self:get_terminal_cwd()
-  vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, 'silent')
+  vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, true)
 end
 
 ---@private
@@ -759,7 +759,7 @@ end
 ---@private
 function Scallop:close_edit()
   if self._edit_winid ~= -1 then
-    vim.fn.win_execute(self._edit_winid, 'stopinsert', 'silent')
+    vim.fn.win_execute(self._edit_winid, 'stopinsert', true)
     vim.api.nvim_win_close(self._edit_winid, true)
     self:closed_edit_window()
   end
