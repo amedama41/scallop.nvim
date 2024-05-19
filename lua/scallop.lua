@@ -175,10 +175,10 @@ function Scallop:jobsend(cmd, options)
   end
 
   if options.cleanup then
-    cmd = vim.api.nvim_replace_termcodes(self._options.cleanup_key_sequence, true, true, true) .. cmd
+    cmd = vim.keycode(self._options.cleanup_key_sequence) .. cmd
   end
   if options.newline then
-    cmd = cmd .. vim.api.nvim_replace_termcodes("<CR>", true, true, true)
+    cmd = cmd .. vim.keycode("<CR>")
   end
 
   local cmd_len = #cmd
@@ -709,11 +709,7 @@ function Scallop:execute_command(is_select)
   vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum, -1, true, cmds)
   vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum + #cmds, -1, true, { '' })
   if is_select then
-    vim.fn.win_execute(
-      self._edit_winid,
-      "normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, true, true),
-      true
-    )
+    vim.fn.win_execute(self._edit_winid, "normal! " .. vim.keycode("<Esc>"), true)
     vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '<', bottom_lnum + 1, 0, {})
     vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '>', bottom_lnum + #cmds, #cmds[#cmds] - 1, {})
   end
@@ -742,7 +738,7 @@ function Scallop:send_ctrl(ctrl)
   if terminal.edit_bufnr == -1 or self._edit_winid == -1 then
     return
   end
-  self:jobsend(vim.api.nvim_replace_termcodes(ctrl, true, true, true), { cleanup = false, newline = false })
+  self:jobsend(vim.keycode(ctrl), { cleanup = false, newline = false })
 
   -- Scroll terminal to bottom
   self:scroll_to_bottom()
