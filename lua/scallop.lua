@@ -733,7 +733,7 @@ function Scallop:execute_command(is_select)
 
   local start_lnum, end_lnum = self:get_command_range(is_select)
   local cmds = vim.api.nvim_buf_get_lines(terminal.edit_bufnr, start_lnum, end_lnum, true)
-  self:jobsend(table.concat(cmds, "\n"), { cleanup = true, newline = true })
+  self:jobsend(table.concat(cmds, "\n"), { cleanup = false, newline = true })
 
   self:scroll_to_bottom()
 
