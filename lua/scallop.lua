@@ -306,6 +306,12 @@ function Scallop:init_terminal_buffer(cwd)
     end
   end, keymap_opt)
 
+  vim.keymap.set('n', '<C-y>', function()
+    if self._living then
+      self:yank_from_prompt(true)
+    end
+  end, keymap_opt)
+
   vim.keymap.set('n', '<C-^>', function()
     if self._living then
       self:switch_terminal()
@@ -390,6 +396,44 @@ function Scallop:jump_to_prompt(direction)
   if search_pos[1] ~= 0 then
     vim.api.nvim_win_set_cursor(self._terminal_winid, search_pos)
   end
+end
+
+---@private
+---@param force_start_insert boolean
+function Scallop:yank_from_prompt(force_start_insert)
+  if self._options.prompt_pattern == '' then
+    return
+  end
+
+  local terminal = self:active_terminal()
+  local search_pos = vim.api.nvim_buf_call(terminal.bufnr, function()
+    return vim.fn.searchpos('^' .. self._options.prompt_pattern .. [[\ze\s*\S]], "bcnW")
+  end)
+
+  if search_pos[1] == 0 then
+    return
+  end
+
+  local last_cmd_line = vim.api.nvim_buf_get_lines(terminal.bufnr, search_pos[1] - 1, search_pos[1], true)
+  local last_cmd = vim.fn.substitute(last_cmd_line[1], '^' .. self._options.prompt_pattern, "", "")
+
+  if self._edit_winid == -1 then
+    self:start_edit(last_cmd, true)
+    return
+  end
+
+  vim.fn.win_gotoid(self._edit_winid)
+  if force_start_insert then
+    vim.fn.win_execute(self._edit_winid, 'startinsert!', true)
+  end
+
+  local last_line = vim.api.nvim_buf_get_lines(terminal.edit_bufnr, -2, -1, true)
+  if vim.fn.match(last_line[1], [[^\s*$]]) ~= -1 then
+    vim.api.nvim_buf_set_lines(terminal.edit_bufnr, -2, -1, true, { last_cmd })
+  else
+    vim.api.nvim_buf_set_lines(terminal.edit_bufnr, -1, -1, true, { last_cmd })
+  end
+  vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line("$", self._edit_winid), #last_cmd })
 end
 
 ---@private
@@ -506,6 +550,8 @@ function Scallop:init_edit_buffer()
         self:jump_to_prompt('forward')
       elseif char == vim.api.nvim_replace_termcodes("<C-p>", true, true, true) then
         self:jump_to_prompt('backward')
+      elseif char == vim.api.nvim_replace_termcodes("<C-y>", true, true, true) then
+        self:yank_from_prompt(false)
       elseif char == vim.api.nvim_replace_termcodes("<C-^>", true, true, true) then
         self:switch_terminal()
       else
