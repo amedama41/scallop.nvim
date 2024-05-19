@@ -464,6 +464,7 @@ function Scallop:init_edit_buffer()
   vim.bo[terminal.edit_bufnr].buflisted = false
   vim.bo[terminal.edit_bufnr].swapfile = false
   vim.bo[terminal.edit_bufnr].filetype = self._options.edit_filetype
+  vim.bo[terminal.edit_bufnr].iminsert = 0
 
   local keymap_opt = { buffer = terminal.edit_bufnr }
 
@@ -552,6 +553,29 @@ function Scallop:init_edit_buffer()
     end, keymap_opt)
   end
 
+  for _, key in pairs({ { "<Up>", "A" }, { "<Down>", "B" }, { "<Left>", "D" }, { "<Right>", "C" }, { "<Home>", "H" }, { "<End>", "F" } }) do
+    vim.keymap.set('l', key[1], function()
+      if self._living then
+        self:send_ctrl("<Esc>[" .. key[2])
+      end
+    end, keymap_opt)
+  end
+  for _, escape_key in pairs({ "<Esc>", "<C-[>" }) do
+    vim.keymap.set('l', "<C-v>" .. escape_key, function()
+      if self._living then
+        self:send_ctrl(escape_key)
+      end
+    end, keymap_opt)
+  end
+
+  vim.api.nvim_create_autocmd('InsertEnter', {
+    buffer = terminal.edit_bufnr,
+    callback = function()
+      local ns = vim.api.nvim_create_namespace("ScallopHighlightNS")
+      vim.api.nvim_set_hl(ns, "TermCursorNC", { link = "TermCursor" })
+      vim.api.nvim_win_set_hl_ns(self._terminal_winid, ns)
+    end,
+  })
   vim.api.nvim_create_autocmd({ 'OptionSet' }, {
     pattern = { 'number', 'relativenumber', 'numberwidth' },
     callback = function()
@@ -577,6 +601,7 @@ function Scallop:init_edit_buffer()
       if terminal.edit_bufnr ~= -1 then
         vim.bo[terminal.edit_bufnr].iminsert = 0
       end
+      vim.api.nvim_win_set_hl_ns(self._terminal_winid, 0)
     end,
   })
   vim.api.nvim_create_autocmd('BufDelete', {
