@@ -282,13 +282,12 @@ function Scallop:init_terminal_buffer(cwd)
 
   local keymap_opt = { buffer = terminal.bufnr }
 
-  vim.keymap.set('n', 'q', function()
+  vim.keymap.set('n', 'a', function()
     if self._living then
-      self:close_terminal()
+      self:start_edit()
     end
   end, keymap_opt)
-
-  vim.keymap.set('n', 'e', function()
+  vim.keymap.set('n', 'i', function()
     if self._living then
       self:start_edit()
     end
@@ -515,16 +514,6 @@ function Scallop:init_edit_buffer()
   vim.keymap.set({ 'n', 'i' }, '<CR>', function()
     if self._living then
       self:execute_command(false)
-    end
-  end, keymap_opt)
-  vim.keymap.set('n', 'q', function()
-    if self._living then
-      self:close_edit()
-    end
-  end, keymap_opt)
-  vim.keymap.set({ 'n', 'i' }, '<C-q>', function()
-    if self._living then
-      self:close_terminal()
     end
   end, keymap_opt)
   vim.keymap.set({ 'n' }, '<C-^>', function()
