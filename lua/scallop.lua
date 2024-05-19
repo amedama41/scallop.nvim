@@ -82,7 +82,7 @@ function Scallop:terminate()
   Scallop.tabpage_scallops[self._tabpage_handle] = nil
 end
 
----@private
+---@package
 function Scallop:switch_terminal()
   local current_active_index = self._active_terminal_index
   if self._prev_terminal_index == current_active_index then
@@ -280,42 +280,7 @@ function Scallop:init_terminal_buffer(cwd)
     end,
   })
 
-  local keymap_opt = { buffer = terminal.bufnr }
-
-  vim.keymap.set('n', 'a', function()
-    if self._living then
-      self:start_edit()
-    end
-  end, keymap_opt)
-  vim.keymap.set('n', 'i', function()
-    if self._living then
-      self:start_edit()
-    end
-  end, keymap_opt)
-
-  vim.keymap.set({ 'n', 'x' }, '<C-n>', function()
-    if self._living then
-      self:jump_to_prompt('forward')
-    end
-  end, keymap_opt)
-
-  vim.keymap.set({ 'n', 'x' }, '<C-p>', function()
-    if self._living then
-      self:jump_to_prompt('backward')
-    end
-  end, keymap_opt)
-
-  vim.keymap.set('n', '<C-y>', function()
-    if self._living then
-      self:yank_from_prompt(true)
-    end
-  end, keymap_opt)
-
-  vim.keymap.set('n', '<C-^>', function()
-    if self._living then
-      self:switch_terminal()
-    end
-  end, keymap_opt)
+  vim.bo[terminal.bufnr].filetype = 'scallop'
 end
 
 ---@package
@@ -373,8 +338,8 @@ function Scallop:get_terminal_cwd()
   return vim.fn.getcwd(self._terminal_winid)
 end
 
----@private
----@param direction string
+---@package
+---@param direction "forward"|"backward"
 function Scallop:jump_to_prompt(direction)
   if self._options.prompt_pattern == '' then
     return
@@ -397,7 +362,7 @@ function Scallop:jump_to_prompt(direction)
   end
 end
 
----@private
+---@package
 ---@param force_start_insert boolean
 function Scallop:yank_from_prompt(force_start_insert)
   if self._options.prompt_pattern == '' then
@@ -435,7 +400,7 @@ function Scallop:yank_from_prompt(force_start_insert)
   vim.api.nvim_win_set_cursor(self._edit_winid, { vim.fn.line("$", self._edit_winid), #last_cmd })
 end
 
----@private
+---@package
 function Scallop:close_terminal()
   if self._terminal_winid ~= -1 then
     vim.api.nvim_win_close(self._terminal_winid, true)
@@ -516,36 +481,9 @@ function Scallop:init_edit_buffer()
       self:execute_command(false)
     end
   end, keymap_opt)
-  vim.keymap.set({ 'n' }, '<C-^>', function()
+  vim.keymap.set('x', '<CR>', function()
     if self._living then
-      self:switch_terminal()
-    end
-  end, keymap_opt)
-
-  vim.keymap.set({ 'n', 'i' }, '<C-g>', function()
-    if self._living then
-      local ok, char = pcall(vim.fn.getcharstr)
-      if not ok then
-        if char == 'Keyboard interrupt' then
-          char = vim.api.nvim_replace_termcodes("<C-c>", true, true, true)
-        else
-          print(":" .. char .. ":")
-          return
-        end
-      end
-      if char == vim.api.nvim_replace_termcodes("<C-g>", true, true, true) then
-        self:scroll_to_bottom()
-      elseif char == vim.api.nvim_replace_termcodes("<C-n>", true, true, true) then
-        self:jump_to_prompt('forward')
-      elseif char == vim.api.nvim_replace_termcodes("<C-p>", true, true, true) then
-        self:jump_to_prompt('backward')
-      elseif char == vim.api.nvim_replace_termcodes("<C-y>", true, true, true) then
-        self:yank_from_prompt(false)
-      elseif char == vim.api.nvim_replace_termcodes("<C-^>", true, true, true) then
-        self:switch_terminal()
-      else
-        self:send_ctrl(char)
-      end
+      self:execute_command(true)
     end
   end, keymap_opt)
 
@@ -560,12 +498,6 @@ function Scallop:init_edit_buffer()
           vim.defer_fn(function() self:start_edit(cmd, true) end, 0)
         end
       )
-    end
-  end, keymap_opt)
-
-  vim.keymap.set('x', '<CR>', function()
-    if self._living then
-      self:execute_command(true)
     end
   end, keymap_opt)
 
@@ -751,7 +683,7 @@ function Scallop:start_edit(initial_cmd, does_insert)
   end
 end
 
----@private
+---@package
 function Scallop:scroll_to_bottom()
   if self._terminal_winid ~= -1 then
     vim.api.nvim_win_set_cursor(self._terminal_winid, { vim.fn.line('$', self._terminal_winid), 0 })
@@ -803,7 +735,7 @@ function Scallop:execute_command(is_select)
   vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, true)
 end
 
----@private
+---@package
 ---@param ctrl string
 function Scallop:send_ctrl(ctrl)
   local terminal = self:active_terminal()
@@ -816,7 +748,7 @@ function Scallop:send_ctrl(ctrl)
   self:scroll_to_bottom()
 end
 
----@private
+---@package
 function Scallop:close_edit()
   if self._edit_winid ~= -1 then
     vim.fn.win_execute(self._edit_winid, 'stopinsert', true)
@@ -836,9 +768,9 @@ end
 
 local M = {}
 
----@package
+---@public
 ---@param cwd? string
-function M.start_terminal(cwd)
+function M.open_terminal(cwd)
   local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
   if scallop == nil then
     scallop = Scallop.new()
@@ -846,16 +778,82 @@ function M.start_terminal(cwd)
   scallop:start_terminal(cwd)
 end
 
----@private
+---@public
+function M.close_terminal()
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:close_terminal()
+end
+
+---@public
 ---@param cmd? string
 ---@param cwd? string
-function M.start_terminal_edit(cmd, cwd)
+function M.open_edit(cmd, cwd)
   local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
   if scallop == nil then
     scallop = Scallop.new()
   end
   scallop:start_terminal(cwd)
   scallop:start_edit(cmd)
+end
+
+---@public
+function M.close_edit()
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:close_edit()
+end
+
+---@public
+---@param direction "forward"|"backward"
+function M.jump_to_prompt(direction)
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:jump_to_prompt(direction)
+end
+
+---@public
+---@param start_insert boolean
+function M.yank_from_prompt(start_insert)
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:yank_from_prompt(start_insert)
+end
+
+---@public
+function M.scroll_to_bottom()
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:scroll_to_bottom()
+end
+
+---@public
+function M.switch_terminal()
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:switch_terminal()
+end
+
+---@public
+---@param chars string
+function M.send_to_terminal(chars)
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:send_ctrl(chars)
 end
 
 vim.api.nvim_create_autocmd('TabClosed', {
