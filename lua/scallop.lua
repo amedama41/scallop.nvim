@@ -26,6 +26,18 @@ local function get_edit_buf_name(job_id)
   return 'scallop-edit@' .. vim.fn.jobpid(job_id)
 end
 
+---@param winid integer
+---@return string
+local function get_autogroup_name(winid)
+  return ('scallop-internal-auto-group-%d'):format(winid)
+end
+
+---@param winid integer
+---@return string
+local function get_edit_autogroup_name(winid)
+  return ('scallop-edit-internal-auto-group-%d'):format(winid)
+end
+
 function Scallop.new()
   local self = setmetatable({
     _active_terminal_index = 1,
@@ -219,7 +231,9 @@ function Scallop:open_terminal_window()
   vim.wo[self._terminal_winid].list = false
   vim.wo[self._terminal_winid].wrap = false
 
+  local group = vim.api.nvim_create_augroup(get_autogroup_name(self._terminal_winid), { clear = true })
   vim.api.nvim_create_autocmd('WinClosed', {
+    group = group,
     pattern = tostring(self._terminal_winid),
     once = true,
     callback = function()
@@ -410,6 +424,10 @@ end
 
 ---@private
 function Scallop:closed_terminal_window()
+  if self._terminal_winid ~= -1 then
+    vim.api.nvim_del_augroup_by_name(get_autogroup_name(self._terminal_winid))
+  end
+
   self._terminal_winid = -1
   self:close_edit()
   vim.fn.win_gotoid(self._prev_winid)
@@ -445,7 +463,9 @@ function Scallop:open_edit_window()
 
   self:set_edit_win_options()
 
+  local group = vim.api.nvim_create_augroup(get_edit_autogroup_name(self._edit_winid), { clear = true })
   vim.api.nvim_create_autocmd({ 'WinResized' }, {
+    group = group,
     pattern = tostring(self._edit_winid),
     callback = function()
       if self._living then
@@ -454,6 +474,7 @@ function Scallop:open_edit_window()
     end,
   })
   vim.api.nvim_create_autocmd('WinClosed', {
+    group = group,
     pattern = tostring(self._edit_winid),
     once = true,
     callback = function()
@@ -543,14 +564,6 @@ function Scallop:init_edit_buffer()
       vim.api.nvim_win_set_hl_ns(self._terminal_winid, ns)
     end,
   })
-  vim.api.nvim_create_autocmd({ 'OptionSet' }, {
-    pattern = { 'number', 'relativenumber', 'numberwidth' },
-    callback = function()
-      if self._living and self._edit_winid ~= -1 then
-        self:set_edit_numberwidth()
-      end
-    end,
-  })
   vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI', 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
     buffer = terminal.edit_bufnr,
     callback = function()
@@ -579,8 +592,12 @@ function Scallop:init_edit_buffer()
   })
 end
 
----@private
+---@package
 function Scallop:set_edit_numberwidth()
+  if not self._living and self._edit_winid == -1 then
+    return
+  end
+
   if vim.wo[self._edit_winid].number or vim.wo[self._edit_winid].relativenumber then
     self._edit_numberwidth = vim.wo[self._edit_winid].numberwidth
   else
@@ -755,6 +772,10 @@ end
 
 ---@private
 function Scallop:closed_edit_window()
+  if self._edit_winid ~= -1 then
+    vim.api.nvim_del_augroup_by_name(get_edit_autogroup_name(self._edit_winid))
+  end
+
   self._edit_winid = -1
 
   if self._terminal_winid ~= -1 then
@@ -852,8 +873,20 @@ function M.send_to_terminal(chars)
   scallop:send_ctrl(chars)
 end
 
+local group = vim.api.nvim_create_augroup('scallop-internal-auto-group', { clear = true })
+vim.api.nvim_create_autocmd({ 'OptionSet' }, {
+  group = group,
+  pattern = { 'number', 'relativenumber', 'numberwidth' },
+  callback = function()
+    for _, scallop in pairs(Scallop.tabpage_scallops) do
+      if scallop._living then
+        scallop:set_edit_numberwidth()
+      end
+    end
+  end,
+})
 vim.api.nvim_create_autocmd('TabClosed', {
-  group = vim.api.nvim_create_augroup('scallop-internal-auto-group', { clear = true }),
+  group = group,
   callback = function()
     local tabpage_livings = {}
     for tabpage, _ in pairs(Scallop.tabpage_scallops) do
