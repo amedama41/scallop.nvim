@@ -594,7 +594,7 @@ end
 
 ---@package
 function Scallop:set_edit_numberwidth()
-  if not self._living and self._edit_winid == -1 then
+  if not self._living or self._edit_winid == -1 then
     return
   end
 
