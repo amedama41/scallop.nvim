@@ -294,7 +294,10 @@ function Scallop:init_terminal_buffer(cwd)
     end,
   })
 
-  vim.bo[terminal.bufnr].filetype = 'scallop'
+  local init_terminal = self._options.hooks.init_terminal
+  if type(init_terminal) == "function" then
+    pcall(init_terminal, terminal.bufnr)
+  end
 end
 
 ---@package

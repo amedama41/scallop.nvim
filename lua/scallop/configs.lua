@@ -9,31 +9,14 @@ M.configs = {
     floating_border = 'rounded',
     edit_filetype = 'bash',
     edit_win_options = {},
-  },
-  mappings = {
-    normal = {
-    },
-    insert = {
+    hooks = {
+      init_terminal = nil
     },
   }
 }
 
-local function merge(dest, source)
-  for k, v in pairs(source) do
-    if type(v) == 'table' then
-      if type(dest[k]) == 'table' then
-        merge(dest[k], source[k])
-      else
-        dest[k] = source[k]
-      end
-    else
-      dest[k] = v
-    end
-  end
-end
-
 function M.setup(configs)
-  merge(M.configs, configs)
+  M.configs = vim.tbl_deep_extend('force', M.configs, configs)
 end
 
 return M
