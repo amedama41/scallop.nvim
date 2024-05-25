@@ -1,5 +1,4 @@
 local configs = require('scallop.configs')
-local shell_histories = require('telescope.shell_histories')
 
 ---@class Scallop
 ---@field private _active_terminal_index integer
@@ -508,20 +507,6 @@ function Scallop:init_edit_buffer()
   vim.keymap.set('x', '<CR>', function()
     if self._living then
       self:execute_command(true)
-    end
-  end, keymap_opt)
-
-  vim.keymap.set({ 'n', 'i' }, '<C-k>', function()
-    if self._living then
-      shell_histories(
-        self:get_edit_all_lines(),
-        self._options.history_filepath,
-        self._options.history_filter,
-        { default_text = self:get_edit_line('.') },
-        function(cmd)
-          vim.defer_fn(function() self:start_edit(cmd, true) end, 0)
-        end
-      )
     end
   end, keymap_opt)
 
