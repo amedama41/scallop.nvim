@@ -529,13 +529,6 @@ function Scallop:init_edit_buffer()
     end, keymap_opt)
   end
 
-  for _, key in pairs({ { "<Up>", "A" }, { "<Down>", "B" }, { "<Left>", "D" }, { "<Right>", "C" }, { "<Home>", "H" }, { "<End>", "F" } }) do
-    vim.keymap.set('l', key[1], function()
-      if self._living then
-        self:send_ctrl("<Esc>[" .. key[2])
-      end
-    end, keymap_opt)
-  end
   for _, escape_key in pairs({ "<Esc>", "<C-[>" }) do
     vim.keymap.set('l', "<C-v>" .. escape_key, function()
       if self._living then
@@ -544,14 +537,6 @@ function Scallop:init_edit_buffer()
     end, keymap_opt)
   end
 
-  vim.api.nvim_create_autocmd('InsertEnter', {
-    buffer = terminal.edit_bufnr,
-    callback = function()
-      local ns = vim.api.nvim_create_namespace("ScallopHighlightNS")
-      vim.api.nvim_set_hl(ns, "TermCursorNC", { link = "TermCursor" })
-      vim.api.nvim_win_set_hl_ns(self._terminal_winid, ns)
-    end,
-  })
   vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI', 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
     buffer = terminal.edit_bufnr,
     callback = function()
@@ -771,6 +756,25 @@ function Scallop:closed_edit_window()
   end
 end
 
+---@package
+---@return boolean does switch direct mode
+function Scallop:switch_direct_mode()
+  local terminal = self:active_terminal()
+  if terminal.edit_bufnr == -1 then
+    return false
+  end
+  local iminsert = vim.bo[terminal.edit_bufnr].iminsert
+  if iminsert == 0 then
+    local ns = vim.api.nvim_create_namespace("ScallopHighlightNS")
+    vim.api.nvim_set_hl(ns, "TermCursorNC", { link = "TermCursor" })
+    vim.api.nvim_win_set_hl_ns(self._terminal_winid, ns)
+    return true
+  else
+    vim.api.nvim_win_set_hl_ns(self._terminal_winid, 0)
+    return true
+  end
+end
+
 local M = {}
 
 ---@public
@@ -860,6 +864,17 @@ function M.send_to_terminal(chars)
   end
   scallop:send_ctrl(chars)
 end
+
+---@public
+vim.keymap.set("i", "<Plug>(ScallopSwitchDirectMode)", function()
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  if scallop:switch_direct_mode() then
+    return "<C-^>"
+  end
+end, { expr = true })
 
 local group = vim.api.nvim_create_augroup('scallop-internal-auto-group', { clear = true })
 vim.api.nvim_create_autocmd({ 'OptionSet' }, {
