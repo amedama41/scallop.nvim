@@ -301,7 +301,8 @@ end
 
 ---@package
 ---@param cwd? string
-function Scallop:start_terminal(cwd)
+---@param confirm_cd boolean
+function Scallop:start_terminal(cwd, confirm_cd)
   ---@type integer
   local cur_winid = vim.fn.win_getid()
   if cur_winid ~= self._terminal_winid and cur_winid ~= self._edit_winid then
@@ -314,19 +315,20 @@ function Scallop:start_terminal(cwd)
   elseif self._terminal_winid == -1 then
     self:open_terminal_window()
     if cwd ~= nil and vim.fn.isdirectory(cwd) then
-      self:terminal_cd(cwd)
+      self:terminal_cd(cwd, confirm_cd)
     end
   else
     vim.fn.win_gotoid(self._terminal_winid)
     if cwd ~= nil and vim.fn.isdirectory(cwd) then
-      self:terminal_cd(cwd)
+      self:terminal_cd(cwd, confirm_cd)
     end
   end
 end
 
 ---@private
 ---@param directory string
-function Scallop:terminal_cd(directory)
+---@param confirm_cd boolean
+function Scallop:terminal_cd(directory, confirm_cd)
   if not vim.fn.isdirectory(directory) then
     return
   end
@@ -336,7 +338,17 @@ function Scallop:terminal_cd(directory)
     return
   end
 
-  self:jobsend(' cd ' .. vim.fn.shellescape(directory), { cleanup = true, newline = true })
+  vim.schedule(function()
+    if confirm_cd then
+      local choice = vim.fn.confirm(
+        ('Does change from %s to %s?'):format(cwd, directory), '&Yes\n&No', 2, 'Question')
+      if choice == 0 or choice == 2 then
+        return
+      end
+    end
+
+    self:jobsend(' cd ' .. vim.fn.shellescape(directory), { cleanup = true, newline = true })
+  end)
 end
 
 ---@private
@@ -779,12 +791,16 @@ local M = {}
 
 ---@public
 ---@param cwd? string
-function M.open_terminal(cwd)
+---@param confirm_cd? boolean
+function M.open_terminal(cwd, confirm_cd)
   local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
   if scallop == nil then
     scallop = Scallop.new()
   end
-  scallop:start_terminal(cwd)
+  if confirm_cd == nil then
+    confirm_cd = false
+  end
+  scallop:start_terminal(cwd, confirm_cd)
 end
 
 ---@public
@@ -799,12 +815,12 @@ end
 ---@public
 ---@param cmd? string
 ---@param cwd? string
-function M.open_edit(cmd, cwd)
+function M.open_edit(cmd, cwd, confirm_cd)
   local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
   if scallop == nil then
     scallop = Scallop.new()
   end
-  scallop:start_terminal(cwd)
+  scallop:start_terminal(cwd, confirm_cd)
   scallop:start_edit(cmd)
 end
 
