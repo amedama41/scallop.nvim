@@ -502,12 +502,6 @@ end
 ---@private
 function Scallop:init_edit_buffer()
   local terminal = self:active_terminal()
-  vim.bo[terminal.edit_bufnr].bufhidden = 'hide'
-  vim.bo[terminal.edit_bufnr].buftype = 'nowrite'
-  vim.bo[terminal.edit_bufnr].buflisted = false
-  vim.bo[terminal.edit_bufnr].swapfile = false
-  vim.bo[terminal.edit_bufnr].filetype = self._options.edit_filetype
-  vim.bo[terminal.edit_bufnr].iminsert = 0
 
   local keymap_opt = { buffer = terminal.edit_bufnr }
 
@@ -523,7 +517,7 @@ function Scallop:init_edit_buffer()
   end, keymap_opt)
 
   --- Direct key mapping
-  for code = 65, 90 do
+  for code = 64, 95 do
     local key = ("<C-%s>"):format(string.char(code))
     vim.keymap.set('l', key, function()
       if self._living then
@@ -537,14 +531,6 @@ function Scallop:init_edit_buffer()
     vim.keymap.set('l', key, function()
       if self._living then
         self:send_ctrl(key)
-      end
-    end, keymap_opt)
-  end
-
-  for _, escape_key in pairs({ "<Esc>", "<C-[>" }) do
-    vim.keymap.set('l', "<C-v>" .. escape_key, function()
-      if self._living then
-        self:send_ctrl(escape_key)
       end
     end, keymap_opt)
   end
@@ -575,6 +561,13 @@ function Scallop:init_edit_buffer()
       terminal.edit_bufnr = -1
     end,
   })
+
+  vim.bo[terminal.edit_bufnr].bufhidden = 'hide'
+  vim.bo[terminal.edit_bufnr].buftype = 'nowrite'
+  vim.bo[terminal.edit_bufnr].buflisted = false
+  vim.bo[terminal.edit_bufnr].swapfile = false
+  vim.bo[terminal.edit_bufnr].filetype = self._options.edit_filetype
+  vim.bo[terminal.edit_bufnr].iminsert = 0
 end
 
 ---@package
