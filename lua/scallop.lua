@@ -538,12 +538,6 @@ function Scallop:init_edit_buffer()
     end, keymap_opt)
   end
 
-  vim.api.nvim_create_autocmd('BufEnter', {
-    buffer = terminal.edit_bufnr,
-    callback = function()
-      self:stop_secret_mode(terminal.edit_bufnr)
-    end,
-  })
   vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI', 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
     buffer = terminal.edit_bufnr,
     callback = function()
@@ -552,15 +546,16 @@ function Scallop:init_edit_buffer()
       end
     end,
   })
-  vim.api.nvim_create_autocmd('InsertLeave', {
+  vim.api.nvim_create_autocmd('BufEnter', {
     buffer = terminal.edit_bufnr,
     callback = function()
-      if vim.go.iminsert == 1 then
-        vim.go.iminsert = 0
-      end
-      if terminal.edit_bufnr ~= -1 then
-        vim.bo[terminal.edit_bufnr].iminsert = 0
-      end
+      self:stop_secret_mode(terminal.edit_bufnr)
+    end,
+  })
+  vim.api.nvim_create_autocmd('BufLeave', {
+    buffer = terminal.edit_bufnr,
+    callback = function()
+      vim.bo[terminal.edit_bufnr].iminsert = 0
       vim.api.nvim_win_set_hl_ns(self._terminal_winid, 0)
       self:stop_secret_mode(terminal.edit_bufnr)
     end,
@@ -839,6 +834,24 @@ function Scallop:switch_direct_mode()
   end
 end
 
+---@package
+function Scallop:stop_insert()
+  if self._edit_winid == -1 then
+    return
+  end
+  local terminal = self:active_terminal()
+  if vim.api.nvim_get_current_buf() ~= terminal.edit_bufnr then
+    return
+  end
+  if vim.go.iminsert == 1 then
+    vim.go.iminsert = 0
+  end
+  vim.bo[terminal.edit_bufnr].iminsert = 0
+  vim.api.nvim_win_set_hl_ns(self._terminal_winid, 0)
+
+  self:stop_secret_mode(terminal.edit_bufnr)
+end
+
 local M = {}
 
 ---@public
@@ -984,6 +997,15 @@ vim.api.nvim_create_autocmd('TabClosed', {
         scallop:terminate()
       end
     end
+  end,
+})
+vim.api.nvim_create_autocmd('InsertLeave', {
+  callback = function()
+    local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+    if scallop == nil then
+      return
+    end
+    scallop:stop_insert()
   end,
 })
 
