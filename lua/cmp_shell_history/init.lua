@@ -36,19 +36,19 @@ function source:complete(params, callback)
   local duplicated = {}
   to_item(items, buffer_lines, duplicated)
 
-  local fd = vim.loop.fs_open(history_filepath, "r", 0)
+  local fd = vim.uv.fs_open(history_filepath, "r", 0)
   if fd == nil then
     return callback({ items = items })
   end
 
-  local stat = vim.loop.fs_fstat(fd)
+  local stat = vim.uv.fs_fstat(fd)
   if stat == nil then
-    vim.loop.fs_close(stat)
+    vim.uv.fs_close(stat)
     return callback{ items = items }()
   end
 
-  vim.loop.fs_read(fd, stat.size, nil, function(err, data)
-    vim.loop.fs_close(fd)
+  vim.uv.fs_read(fd, stat.size, nil, function(err, data)
+    vim.uv.fs_close(fd)
     if err ~= nil then
       callback{ items = items }()
     end
