@@ -29,7 +29,9 @@ function source:complete(params, callback)
   local option = vim.tbl_extend("keep", params.option, default_option)
   local history_filepath = vim.fn.expand(option.history_filepath)
 
+  local currpos = vim.api.nvim_win_get_cursor(0)
   local buffer_lines = vim.api.nvim_buf_get_lines(0, 0, -1, true)
+  table.remove(buffer_lines, currpos[1])
   local items = {}
   local duplicated = {}
   to_item(items, buffer_lines, duplicated)
