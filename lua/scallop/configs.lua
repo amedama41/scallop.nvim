@@ -1,5 +1,16 @@
 local M = {}
 
+---@class ScallopHooks
+---@field init_terminal nil|fun(bufnr: integer)
+
+---@class ScallopOptions
+---@field prompt_pattern string
+---@field cleanup_key_sequence string
+---@field floating_border string|string[]
+---@field edit_filetype string
+---@field edit_win_options table<string, any>
+---@field hooks ScallopHooks
+
 M.configs = {
   options = {
     prompt_pattern = '',
@@ -8,7 +19,7 @@ M.configs = {
     edit_filetype = 'bash',
     edit_win_options = {},
     hooks = {
-      init_terminal = nil
+      init_terminal = nil,
     },
   }
 }

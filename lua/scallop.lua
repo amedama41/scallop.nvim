@@ -9,8 +9,9 @@ local configs = require('scallop.configs')
 ---@field private _edit_winwidth integer
 ---@field private _edit_winheight integer
 ---@field private _edit_numberwidth integer
+---@field private _edit_secret_mark integer|nil
 ---@field private _prev_winid integer
----@field private _options table
+---@field private _options ScallopOptions
 ---@field package _living boolean
 ---@field private _tabpage_handle unknown
 local Scallop = {}
@@ -58,6 +59,7 @@ function Scallop.new()
     _edit_winwidth = -1,
     _edit_winheight = -1,
     _edit_numberwidth = 0,
+    _edit_secret_mark = nil,
     _prev_winid = -1,
     _options = vim.deepcopy(configs.configs.options),
     _living = true,
@@ -209,7 +211,6 @@ function Scallop:jobsend(cmd, options)
   end
 end
 
----@private
 ---@private
 function Scallop:open_terminal_window()
   local terminal = self:active_terminal()
@@ -537,6 +538,12 @@ function Scallop:init_edit_buffer()
     end, keymap_opt)
   end
 
+  vim.api.nvim_create_autocmd('BufEnter', {
+    buffer = terminal.edit_bufnr,
+    callback = function()
+      self:stop_secret_mode(terminal.edit_bufnr)
+    end,
+  })
   vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI', 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
     buffer = terminal.edit_bufnr,
     callback = function()
@@ -555,6 +562,7 @@ function Scallop:init_edit_buffer()
         vim.bo[terminal.edit_bufnr].iminsert = 0
       end
       vim.api.nvim_win_set_hl_ns(self._terminal_winid, 0)
+      self:stop_secret_mode(terminal.edit_bufnr)
     end,
   })
   vim.api.nvim_create_autocmd('BufDelete', {
@@ -703,12 +711,20 @@ function Scallop:execute_command(is_select)
 
   local bottom_lnum = vim.fn.line('$', self._edit_winid)
 
-  vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum, -1, true, cmds)
-  vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum + #cmds, -1, true, { '' })
+  local secret_mode = self._edit_secret_mark ~= nil
+  if secret_mode then
+    self:stop_secret_mode(terminal.edit_bufnr)
+    vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum, -1, true, { '' })
+  else
+    vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum, -1, true, cmds)
+    vim.api.nvim_buf_set_lines(terminal.edit_bufnr, bottom_lnum + #cmds, -1, true, { '' })
+  end
   if is_select then
     vim.fn.win_execute(self._edit_winid, "normal! " .. vim.keycode("<Esc>"), true)
-    vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '<', bottom_lnum + 1, 0, {})
-    vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '>', bottom_lnum + #cmds, #cmds[#cmds] - 1, {})
+    if not secret_mode then
+      vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '<', bottom_lnum + 1, 0, {})
+      vim.api.nvim_buf_set_mark(terminal.edit_bufnr, '>', bottom_lnum + #cmds, #cmds[#cmds] - 1, {})
+    end
   end
 
   for lnum = bottom_lnum, end_lnum, -1 do
@@ -763,6 +779,45 @@ function Scallop:closed_edit_window()
   end
 end
 
+---@private
+---@param bufnr integer
+---@param line integer
+function Scallop:start_secret_mode(bufnr, line)
+  local ns = vim.api.nvim_create_namespace("ScallopHighlightNS")
+  self._edit_secret_mark = vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+    end_row = line,
+    end_col = 0,
+    hl_group = "ScallopSecretMode",
+    hl_eol = true,
+    right_gravity = false,
+  })
+end
+
+---@private
+---@param bufnr integer
+function Scallop:stop_secret_mode(bufnr)
+  if self._edit_secret_mark ~= nil then
+    local ns = vim.api.nvim_create_namespace("ScallopHighlightNS")
+    vim.api.nvim_buf_del_extmark(bufnr, ns, self._edit_secret_mark)
+    self._edit_secret_mark = nil
+  end
+end
+
+---@package
+function Scallop:toggle_secret_mode()
+  if self._edit_winid ~= -1 then
+    local terminal = self:active_terminal()
+    if self._edit_secret_mark == nil then
+      if vim.api.nvim_get_current_buf() == terminal.edit_bufnr then
+        local pos = vim.api.nvim_win_get_cursor(self._edit_winid)
+        self:start_secret_mode(terminal.edit_bufnr, pos[1])
+      end
+    else
+      self:stop_secret_mode(terminal.edit_bufnr)
+    end
+  end
+end
+
 ---@package
 ---@return boolean does switch direct mode
 function Scallop:switch_direct_mode()
@@ -772,6 +827,8 @@ function Scallop:switch_direct_mode()
   end
   local iminsert = vim.bo[terminal.edit_bufnr].iminsert
   if iminsert == 0 then
+    self:stop_secret_mode(terminal.edit_bufnr)
+
     local ns = vim.api.nvim_create_namespace("ScallopHighlightNS")
     vim.api.nvim_set_hl(ns, "TermCursorNC", { link = "TermCursor" })
     vim.api.nvim_win_set_hl_ns(self._terminal_winid, ns)
@@ -877,6 +934,14 @@ function M.send_to_terminal(chars)
 end
 
 ---@public
+function M.toggle_secret_mode()
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:toggle_secret_mode()
+end
+
 vim.keymap.set("i", "<Plug>(ScallopSwitchDirectMode)", function()
   local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
   if scallop == nil then
@@ -920,6 +985,10 @@ vim.api.nvim_create_autocmd('TabClosed', {
       end
     end
   end,
+})
+
+vim.api.nvim_set_hl(0, "ScallopSecretMode", {
+  reverse = true,
 })
 
 return M
