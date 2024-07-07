@@ -519,25 +519,6 @@ function Scallop:init_edit_buffer()
     end
   end, keymap_opt)
 
-  --- Direct key mapping
-  for code = 64, 95 do
-    local key = ("<C-%s>"):format(string.char(code))
-    vim.keymap.set('l', key, function()
-      if self._living then
-        self:send_ctrl(key)
-      end
-    end, keymap_opt)
-  end
-
-  for code = 32, 127 do
-    local key = string.char(code)
-    vim.keymap.set('l', key, function()
-      if self._living then
-        self:send_ctrl(key)
-      end
-    end, keymap_opt)
-  end
-
   vim.api.nvim_create_autocmd({ 'CursorMoved', 'CursorMovedI', 'TextChanged', 'TextChangedI', 'TextChangedP' }, {
     buffer = terminal.edit_bufnr,
     callback = function()
@@ -555,8 +536,6 @@ function Scallop:init_edit_buffer()
   vim.api.nvim_create_autocmd('BufLeave', {
     buffer = terminal.edit_bufnr,
     callback = function()
-      vim.bo[terminal.edit_bufnr].iminsert = 0
-      vim.api.nvim_win_set_hl_ns(self._terminal_winid, 0)
       self:stop_secret_mode(terminal.edit_bufnr)
     end,
   })
@@ -572,7 +551,6 @@ function Scallop:init_edit_buffer()
   vim.bo[terminal.edit_bufnr].buflisted = false
   vim.bo[terminal.edit_bufnr].swapfile = false
   vim.bo[terminal.edit_bufnr].filetype = self._options.edit_filetype
-  vim.bo[terminal.edit_bufnr].iminsert = 0
 end
 
 ---@package
@@ -814,27 +792,6 @@ function Scallop:toggle_secret_mode()
 end
 
 ---@package
----@return boolean does switch direct mode
-function Scallop:switch_direct_mode()
-  local terminal = self:active_terminal()
-  if terminal.edit_bufnr == -1 then
-    return false
-  end
-  local iminsert = vim.bo[terminal.edit_bufnr].iminsert
-  if iminsert == 0 then
-    self:stop_secret_mode(terminal.edit_bufnr)
-
-    local ns = vim.api.nvim_create_namespace("ScallopHighlightNS")
-    vim.api.nvim_set_hl(ns, "TermCursorNC", { link = "TermCursor" })
-    vim.api.nvim_win_set_hl_ns(self._terminal_winid, ns)
-    return true
-  else
-    vim.api.nvim_win_set_hl_ns(self._terminal_winid, 0)
-    return true
-  end
-end
-
----@package
 function Scallop:stop_insert()
   if self._edit_winid == -1 then
     return
@@ -843,11 +800,6 @@ function Scallop:stop_insert()
   if vim.api.nvim_get_current_buf() ~= terminal.edit_bufnr then
     return
   end
-  if vim.go.iminsert == 1 then
-    vim.go.iminsert = 0
-  end
-  vim.bo[terminal.edit_bufnr].iminsert = 0
-  vim.api.nvim_win_set_hl_ns(self._terminal_winid, 0)
 
   self:stop_secret_mode(terminal.edit_bufnr)
 end
@@ -954,16 +906,6 @@ function M.toggle_secret_mode()
   end
   scallop:toggle_secret_mode()
 end
-
-vim.keymap.set("i", "<Plug>(ScallopSwitchDirectMode)", function()
-  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
-  if scallop == nil then
-    return
-  end
-  if scallop:switch_direct_mode() then
-    return "<C-^>"
-  end
-end, { expr = true })
 
 local group = vim.api.nvim_create_augroup('scallop-internal-auto-group', { clear = true })
 vim.api.nvim_create_autocmd({ 'OptionSet' }, {
