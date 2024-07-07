@@ -439,6 +439,14 @@ function Scallop:close_terminal()
   end
 end
 
+---@package
+function Scallop:enter_terminal()
+  if self._terminal_winid ~= -1 then
+    self:close_edit_impl(false)
+    vim.fn.win_execute(self._terminal_winid, 'startinsert', true)
+  end
+end
+
 ---@private
 function Scallop:closed_terminal_window()
   if self._terminal_winid ~= -1 then
@@ -730,13 +738,21 @@ function Scallop:send_ctrl(ctrl)
   self:scroll_to_bottom()
 end
 
----@package
-function Scallop:close_edit()
+---@private
+---@param stopinsert boolean
+function Scallop:close_edit_impl(stopinsert)
   if self._edit_winid ~= -1 then
-    vim.fn.win_execute(self._edit_winid, 'stopinsert', true)
+    if stopinsert then
+      vim.fn.win_execute(self._edit_winid, 'stopinsert', true)
+    end
     vim.api.nvim_win_close(self._edit_winid, true)
     self:closed_edit_window()
   end
+end
+
+---@package
+function Scallop:close_edit()
+  self:close_edit_impl(true)
 end
 
 ---@private
@@ -827,6 +843,15 @@ function M.close_terminal()
     return
   end
   scallop:close_terminal()
+end
+
+---@public
+function M.enter_terminal()
+  local scallop = Scallop.tabpage_scallops[vim.api.nvim_get_current_tabpage()]
+  if scallop == nil then
+    return
+  end
+  scallop:enter_terminal()
 end
 
 ---@public
