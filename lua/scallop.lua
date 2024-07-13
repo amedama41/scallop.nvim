@@ -218,7 +218,7 @@ function Scallop:open_terminal_window()
     terminal.bufnr = vim.fn.bufadd('')
   end
 
-  self._terminal_winid = vim.api.nvim_open_win(terminal.bufnr, true, {
+  self._terminal_winid = vim.api.nvim_open_win(terminal.bufnr, false, {
     relative = 'editor',
     row = 1,
     col = 1,
@@ -317,14 +317,10 @@ function Scallop:start_terminal(cwd, confirm_cd)
     self:init_terminal_buffer(cwd)
   elseif self._terminal_winid == -1 then
     self:open_terminal_window()
-    if cwd ~= nil and vim.fn.isdirectory(cwd) then
-      self:terminal_cd(cwd, confirm_cd)
-    end
-  else
     vim.fn.win_gotoid(self._terminal_winid)
-    if cwd ~= nil and vim.fn.isdirectory(cwd) then
-      self:terminal_cd(cwd, confirm_cd)
-    end
+  end
+  if cwd ~= nil and vim.fn.isdirectory(cwd) then
+    self:terminal_cd(cwd, confirm_cd)
   end
 end
 
@@ -476,7 +472,7 @@ function Scallop:open_edit_window()
   end
 
   self._edit_winheight = 1
-  self._edit_winid = vim.api.nvim_open_win(terminal.edit_bufnr, true, {
+  self._edit_winid = vim.api.nvim_open_win(terminal.edit_bufnr, false, {
     relative = 'editor',
     row = 1 + vim.o.columns - 6,
     col = 1,
@@ -643,9 +639,8 @@ function Scallop:start_edit(initial_cmd, does_insert)
   elseif self._edit_winid == -1 then
     self:open_edit_window()
     self:restore_edit_cursor(terminal.edit_bufnr)
-  else
-    vim.fn.win_gotoid(self._edit_winid)
   end
+  vim.fn.win_gotoid(self._edit_winid)
 
   local cwd = self:get_terminal_cwd()
   vim.fn.win_execute(self._edit_winid, 'lcd ' .. cwd, true)
