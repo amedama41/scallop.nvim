@@ -228,10 +228,10 @@ function Scallop:open_terminal_window()
     zindex = 11,
   })
 
-  vim.wo[self._terminal_winid].list = false
-  vim.wo[self._terminal_winid].wrap = false
+  vim.wo[self._terminal_winid][0].list = false
+  vim.wo[self._terminal_winid][0].wrap = false
   --- if foldmethod is 'expr', reopening a terminal will take long time
-  vim.wo[self._terminal_winid].foldmethod = 'manual'
+  vim.wo[self._terminal_winid][0].foldmethod = 'manual'
 
   local group = vim.api.nvim_create_augroup(get_autogroup_name(self._terminal_winid), { clear = true })
   vim.api.nvim_create_autocmd('WinClosed', {
