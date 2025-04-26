@@ -546,7 +546,9 @@ function Scallop:init_edit_buffer()
   vim.api.nvim_create_autocmd('BufDelete', {
     buffer = terminal.edit_bufnr,
     callback = function()
-      terminal.edit_bufnr = -1
+      if not vim.api.nvim_buf_is_valid(terminal.edit_bufnr) then
+        terminal.edit_bufnr = -1
+      end
     end,
   })
 
